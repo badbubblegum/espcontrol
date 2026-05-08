@@ -1,0 +1,134 @@
+# =============================================================================
+# DEVICE - Waveshare ESP32-S3-N8R8 7" Capacitive Touch Display 800×480
+# https://www.waveshare.com/esp32-s3-touch-lcd-7.htm
+# =============================================================================
+
+substitutions:
+  espcontrol_component_url: "https://github.com/jtenniswood/espcontrol"
+  espcontrol_component_ref: "main"
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: ESP32S3
+  flash_size: 8MB
+  cpu_frequency: 240MHz
+  framework:
+    type: esp-idf
+    advanced:
+      enable_idf_experimental_features: true
+    sdkconfig_options:
+      COMPILER_OPTIMIZATION_SIZE: y
+      CONFIG_ESP32S3_DATA_CACHE_64KB: "y"
+      CONFIG_ESPTOOLPY_FLASHSIZE_8MB: "y"
+      CONFIG_FREERTOS_HZ: "1000"
+      CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240: y
+      CONFIG_ESPTOOLPY_FLASHMODE_QIO: y
+      CONFIG_ESPTOOLPY_FLASHFREQ_120M: y
+      CONFIG_SPIRAM_MODE_OCT: y
+      CONFIG_IDF_EXPERIMENTAL_FEATURES: y
+      CONFIG_SPIRAM_SPEED_120M: y
+      CONFIG_SPIRAM_FETCH_INSTRUCTIONS: y
+      CONFIG_SPIRAM_RODATA: y
+      CONFIG_ESP32S3_DATA_CACHE_LINE_64B: y
+      CONFIG_COMPILER_OPTIMIZATION_PERF: y
+      CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC: "y"
+      CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM: "8"
+      CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP: "y"
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  platformio_options:
+    build_flags: "-DBOARD_HAS_PSRAM"
+    board_build.arduino.memory_type: qio_opi
+    board_build.flash_mode: dio
+    board_upload.maximum_ram_size: 524288
+  on_boot:
+    - priority: 800
+      then:
+        - lambda: |-
+            auto reason = esp_reset_reason();
+            if (reason == ESP_RST_USB || reason == ESP_RST_SW) {
+              esp_sleep_enable_timer_wakeup(100000);
+              esp_deep_sleep_start();
+            }
+    - priority: -100
+      then:
+        - script.execute: apply_screen_rotation
+
+external_components:
+  - source:
+      type: git
+      url: ${espcontrol_component_url}
+      ref: ${espcontrol_component_ref}
+      path: components
+    components: [espcontrol]
+    refresh: 0s
+
+espcontrol:
+
+psram:
+  mode: octal
+  speed: 120MHz
+
+ota:
+  - platform: esphome
+    on_begin:
+      then:
+        - light.turn_off: display_backlight
+    on_end:
+      then:
+        - lambda: |-
+            esp_sleep_enable_timer_wakeup(100000);
+            esp_deep_sleep_start();
+  - platform: http_request
+
+packages:
+  core_infra: !include ../../../common/device/core_infra.yaml
+
+logger:
+
+wifi:
+  use_psram: true
+
+ch422g:
+  - id: ch422g_hub
+
+spi:
+  clk_pin: GPIO12
+  mosi_pin: GPIO11
+  miso_pin: GPIO13
+
+i2c:
+  sda: GPIO08
+  scl: GPIO09
+  scan: true
+  id: bus_a
+
+output:
+  - platform: gpio
+    id: lcdbacklight_output
+    pin:
+      ch422g: ch422g_hub
+      number: 2
+      mode:
+        output: true
+      inverted: false
+
+  - platform: template
+    id: gpio_backlight_pwm
+    type: float
+    write_action:
+      - if:
+          condition:
+            lambda: 'return state > 0.01f;'
+          then:
+            - output.turn_on: lcdbacklight_output
+          else:
+            - output.turn_off: lcdbacklight_output
+
+light:
+  - platform: binary
+    output: lcdbacklight_output
+    name: Display Backlight
+    icon: mdi:lightbulb-o
