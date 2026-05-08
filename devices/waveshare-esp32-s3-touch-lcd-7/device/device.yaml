@@ -44,14 +44,14 @@ esphome:
     board_build.flash_mode: dio
     board_upload.maximum_ram_size: 524288
   on_boot:
-    - priority: 800
-      then:
-        - lambda: |-
-            auto reason = esp_reset_reason();
-            if (reason == ESP_RST_USB || reason == ESP_RST_SW) {
-              esp_sleep_enable_timer_wakeup(100000);
-              esp_deep_sleep_start();
-            }
+#    - priority: 800
+#      then:
+#        - lambda: |-
+#            auto reason = esp_reset_reason();
+#            if (reason == ESP_RST_USB || reason == ESP_RST_SW) {
+#              esp_sleep_enable_timer_wakeup(100000);
+#              esp_deep_sleep_start();
+#            }
     - priority: -100
       then:
         - script.execute: apply_screen_rotation
