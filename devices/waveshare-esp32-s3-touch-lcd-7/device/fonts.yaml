@@ -1,0 +1,34 @@
+# =============================================================================
+# FONTS (DEVICE OVERRIDE) - Fonts for 800×480 landscape display
+# =============================================================================
+font:
+  # Button icons (52px)
+  - file: 'https://github.com/Templarian/MaterialDesign-Webfont/raw/v7.4.47/fonts/materialdesignicons-webfont.ttf'
+    id: icon_font_md
+    size: 52
+    bpp: 4
+    glyphs: !include ../../../common/assets/icon_glyphs.yaml
+  # Button labels (24px)
+  - file: "gfonts://Roboto"
+    id: label_font_md
+    size: 24
+    bpp: 4
+    glyphs: !include ../../../common/assets/text_glyphs.yaml
+    extras:
+      - file: "gfonts://Heebo"
+        glyphs: !include ../../../common/assets/hebrew_glyphs.yaml
+  # Climate detail page: oversized target temperature
+  - file: "gfonts://Roboto@Light"
+    id: climate_target_font_md
+    size: 120
+    bpp: 4
+    glyphs:
+      - "0123456789.-"
+  # Top bar clock and temperature (22px)
+  - file: "gfonts://Roboto"
+    id: clockbar_font_md
+    size: 22
+    bpp: 4
+    extras:
+      - file: "gfonts://Heebo"
+        glyphs: !include ../../../common/assets/hebrew_glyphs.yaml
