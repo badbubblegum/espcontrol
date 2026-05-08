@@ -131,4 +131,142 @@ light:
   - platform: binary
     output: lcdbacklight_output
     name: Display Backlight
-    icon: mdi:lightbulb-o
+    icon: mdi:lightbulb-on
+    id: display_backlight
+    restore_mode: RESTORE_DEFAULT_ON
+    on_turn_on:
+      then:
+        - if:
+            condition:
+              lambda: |-
+                return id(screen_schedule_asleep) ||
+                       (id(schedule_enabled).state && !panel_time_or_fallback(id(panel_time).now(), id(homeassistant_time).now()).is_valid());
+            then:
+              - script.execute: backlight_force_display_off
+            else:
+              - if:
+                  condition:
+                    lambda: 'return id(screensaver_display_off_active);'
+                  then:
+                    - script.execute: screensaver_wake
+
+touchscreen:
+  - platform: gt911
+    id: my_touchscreen
+    display: my_display
+    i2c_id: bus_a
+    update_interval: 16ms
+    interrupt_pin: GPIO4
+    transform:
+      swap_xy: false
+      mirror_x: false
+      mirror_y: false
+    reset_pin:
+      ch422g: ch422g_hub
+      number: 1
+      mode: OUTPUT
+    on_touch:
+      - script.execute: screensaver_wake
+
+display:
+  - platform: rpi_dpi_rgb
+    id: my_display
+    update_interval: never
+    auto_clear_enabled: false
+    color_order: RGB
+    pclk_frequency: 16MHz
+    dimensions:
+      width: 800
+      height: 480
+    de_pin:
+      number: 5
+    hsync_pin:
+      number: 46
+      ignore_strapping_warning: true
+    vsync_pin:
+      number: 3
+      ignore_strapping_warning: true
+    pclk_pin: 7
+    pclk_inverted: true
+    reset_pin:
+      ch422g: ch422g_hub
+      number: 3
+    hsync_back_porch: 8
+    hsync_front_porch: 8
+    hsync_pulse_width: 4
+    vsync_back_porch: 16
+    vsync_front_porch: 16
+    vsync_pulse_width: 4
+    data_pins:
+      red:
+        - 1
+        - 2
+        - 42
+        - 41
+        - 40
+      blue:
+        - 14
+        - 38
+        - 18
+        - 17
+        - 10
+      green:
+        - 39
+        - 0
+        - 45
+        - 48
+        - 47
+        - 21
+
+lvgl:
+  id: main_lvgl
+  setup_priority: 230
+  buffer_size: 25%
+  displays: my_display
+  rotation: 180
+  touchscreens:
+    - touchscreen_id: my_touchscreen
+      long_press_time: 3s
+
+script:
+  - id: apply_screen_rotation
+    then:
+      - if:
+          condition:
+            lambda: 'return id(screen_rotation_select).current_option() == "90";'
+          then:
+            - lvgl.display.set_rotation: 270
+          else:
+            - if:
+                condition:
+                  lambda: 'return id(screen_rotation_select).current_option() == "180";'
+                then:
+                  - lvgl.display.set_rotation: 0
+                else:
+                  - if:
+                      condition:
+                        lambda: 'return id(screen_rotation_select).current_option() == "270";'
+                      then:
+                        - lvgl.display.set_rotation: 90
+                      else:
+                        - lvgl.display.set_rotation: 180
+
+select:
+  - platform: template
+    name: "Screen: Rotation"
+    internal: true
+    disabled_by_default: true
+    id: screen_rotation_select
+    entity_category: config
+    icon: "mdi:screen-rotation"
+    optimistic: true
+    restore_value: true
+    initial_option: "0"
+    options:
+      - "0"
+      - "90"
+      - "180"
+      - "270"
+    on_value:
+      then:
+        - script.execute: apply_screen_rotation
