@@ -27,7 +27,7 @@ The panel's built-in web page loads some visual resources from the internet. If 
 - Make sure you're connecting to a **2.4 GHz** network. The panel does not support 5 GHz WiFi.
 - Double-check your **WiFi password** — it's easy to mistype on a small screen.
 - Move the panel **closer to your router** during initial setup. You can move it to its final location afterwards.
-- If the panel previously connected but can't anymore (e.g. you changed your WiFi password), it will create a hotspot so you can enter the new details. Look for a network called **espcontrol-xxxxxx**.
+- If the panel previously connected but can't anymore (e.g. you changed your WiFi password), it will first try to reconnect. If that does not work, it will create a hotspot so you can enter the new details. Look for a network called **ESP_xxxxxx**; it can take up to **90 seconds** to appear.
 
 ## How Do I Reset the Device?
 
@@ -70,7 +70,7 @@ The home screen has a grid of card slots sized to fill the screen:
 - **10.1-inch JC8012P4A1** — 20 cards (4 rows, 5 columns)
 - **7-inch JC1060P470** — 15 cards (3 rows, 5 columns)
 - **4.3-inch JC4880P443** — 6 cards (3 rows, 2 columns)
-- **4-inch Waveshare ESP32-P4 86 Panel** — 9 cards (3 rows, 3 columns)
+- **4-inch ESP32-P4 86 Panel** — 9 cards (3 rows, 3 columns)
 - **4-inch 4848S040** — 9 cards (3 rows, 3 columns)
 
 You can have even more using **Subpage** cards. Any home-screen card can be turned into a folder that opens a new page of cards. Each subpage has one fewer usable slot than the home screen because it includes a Back card. See [Subpage](/features/subpages) for details.
@@ -90,7 +90,7 @@ EspControl currently supports these touchscreen panels:
 - **JC8012P4A1** — 10.1-inch, 1280x800 landscape orientation (ESP32-P4)
 - **JC1060P470** — 7-inch, 1024x600, landscape orientation (ESP32-P4)
 - **JC4880P443** — 4.3-inch, 480x800, portrait orientation (ESP32-P4)
-- **Waveshare ESP32-P4 86 Panel** — 4-inch, 720x720, square (ESP32-P4)
+- **ESP32-P4 86 Panel** — 4-inch, 720x720, square (ESP32-P4)
 - **4848S040** — 4-inch, 480x480, square (ESP32-S3)
 
 All use the same firmware features, card configuration, and web UI. The grid layout automatically matches each panel's screen size and orientation.
@@ -102,6 +102,7 @@ EspControl is built specifically for Home Assistant. It does not support other p
 ## The Display Is Stuck on the Loading Screen
 
 - Give it up to **60 seconds** on first boot. It needs time to connect to WiFi and download resources.
+- If the display shows a WiFi reconnecting message, wait a little longer. Short WiFi outages can recover by themselves before setup mode starts.
 - If it stays on the loading screen, **power-cycle** the panel (unplug and re-plug the USB-C cable).
 - If the WiFi hotspot appears after restarting, the panel couldn't connect to your network — go through the [WiFi setup](/getting-started/install#connect-to-wifi) again.
 

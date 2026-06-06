@@ -1,5 +1,5 @@
 ---
-title: Manual ESPHome Setup for EspControl
+title: Manual ESPHome Setup
 description:
   How to add EspControl to ESPHome manually, compile the firmware, and install it by USB or OTA.
 ---
@@ -28,7 +28,7 @@ Each screen uses a different ESPHome package file. Pick the one that matches you
 | 10.1-inch JC8012P4A1 | `devices/guition-esp32-p4-jc8012p4a1/packages.yaml` |
 | 7-inch JC1060P470 | `devices/guition-esp32-p4-jc1060p470/packages.yaml` |
 | 4.3-inch JC4880P443 | `devices/guition-esp32-p4-jc4880p443/packages.yaml` |
-| 4-inch Waveshare ESP32-P4 86 Panel | `devices/esp32-p4-86/packages.yaml` |
+| 4-inch ESP32-P4 86 Panel | `devices/esp32-p4-86/packages.yaml` |
 | 4-inch 4848S040 | `devices/guition-esp32-s3-4848s040/packages.yaml` |
 
 ## ESPHome Device Builder
@@ -53,7 +53,7 @@ packages:
   setup:
     url: https://github.com/jtenniswood/espcontrol/
     file: devices/guition-esp32-p4-jc1060p470/packages.yaml
-    refresh: 1d
+    refresh: 1sec
 ```
 
 If you do not use ESPHome secrets, replace the two `!secret` lines with your WiFi details:
@@ -64,6 +64,35 @@ wifi:
   password: "Your WiFi Password"
 ```
 
+## Advanced: Password-Protect the Web Page
+
+EspControl's built-in web page can be protected with a username and password when you compile and install the firmware yourself. This is useful if other people can reach your local network and you do not want them opening the display setup page.
+
+First, add these entries to your ESPHome `secrets.yaml` file:
+
+```yaml
+espcontrol_web_username: "admin"
+espcontrol_web_password: "choose-a-strong-password"
+```
+
+Then add the `web_server_auth` package to your EspControl device YAML:
+
+```yaml
+packages:
+  setup:
+    url: https://github.com/jtenniswood/espcontrol/
+    file: devices/guition-esp32-p4-jc1060p470/packages.yaml
+    refresh: 1sec
+  web_server_auth:
+    url: https://github.com/jtenniswood/espcontrol/
+    file: common/addon/web_server_auth.yaml
+    refresh: 1sec
+```
+
+After saving, validate the device and install the firmware again. The next time you open the display address in a browser, it will ask for the username and password.
+
+Use a different password for each display. This protects the local web page, but it is not a replacement for normal network security, so do not expose the display directly to the internet.
+
 ## Advanced: Ethernet Options
 
 Some supported ESP32-P4 panels include wired Ethernet. ESPHome cannot run WiFi and Ethernet in the same firmware, so this option is Ethernet-only and is intended for manual installs.
@@ -73,7 +102,7 @@ Use this template for Ethernet-capable models. Do not add a `wifi:` block. Chang
 | Panel | Ethernet package file |
 | --- | --- |
 | 7-inch JC1060P470 Ethernet model | `devices/guition-esp32-p4-jc1060p470/packages.yaml` |
-| Waveshare ESP32-P4 86 Panel ETH-2RO | `devices/esp32-p4-86/packages.yaml` |
+| ESP32-P4 86 Panel ETH-2RO | `devices/esp32-p4-86/packages.yaml` |
 
 ```yaml
 substitutions:
@@ -86,7 +115,7 @@ packages:
   setup:
     url: https://github.com/jtenniswood/espcontrol/
     file: devices/esp32-p4-86/packages.yaml
-    refresh: 1d
+    refresh: 1sec
 ```
 
 If Ethernet is unplugged or your network does not give the display an IP address, the display will show an Ethernet setup message. It will not create a WiFi hotspot in this mode.
@@ -126,10 +155,10 @@ If ESPHome cannot access the USB port directly, choose **Manual download** inste
 2. Add it to Home Assistant when the ESPHome integration discovers it.
 3. Open the display address in a browser, for example `http://192.168.1.42`.
 4. Configure cards, colours, brightness, and other settings from the built-in web page.
-5. Follow [Home Assistant Actions](/getting-started/home-assistant-actions) so the display is allowed to control your Home Assistant devices.
+5. Follow [Enable Actions](/getting-started/home-assistant-actions) so the display is allowed to control your Home Assistant devices.
 
 ## Updating Later
 
-Because the package uses `refresh: 1d`, ESPHome checks GitHub for EspControl updates about once a day when it compiles. To update manually, open ESPHome Device Builder and run **Install** again. If the display is online, use OTA so you do not need to reconnect USB.
+Because the package uses `refresh: 1sec`, ESPHome checks GitHub for EspControl updates each time it compiles. To update manually, open ESPHome Device Builder and run **Install** again. If the display is online, use OTA so you do not need to reconnect USB.
 
-Next: [Home Assistant Actions](/getting-started/home-assistant-actions)
+Next: [Enable Actions](/getting-started/home-assistant-actions)

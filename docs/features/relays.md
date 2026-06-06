@@ -6,7 +6,7 @@ description:
 
 # Built-in Relays
 
-Some supported panels include physical relays that can switch external low-voltage circuits. The Guition 4-inch relay variant is often listed as **4848S040C** and includes three relays. The Waveshare **ESP32-P4-86-Panel-ETH-2RO** includes two relays.
+Some supported panels include physical relays that can switch external low-voltage circuits. The Guition 4-inch relay variant is often listed as **4848S040C** and includes three relays. The **ESP32-P4-86-Panel-ETH-2RO** includes two relays.
 
 The relays are exposed by the standard firmware for each supported relay panel.
 
@@ -22,8 +22,8 @@ EspControl exposes each relay in two ways:
 | 4848S040C | **Relay 1** | `switch.<device_name>_relay_1` | `button.<device_name>_relay_1_push` | GPIO40 |
 | 4848S040C | **Relay 2** | `switch.<device_name>_relay_2` | `button.<device_name>_relay_2_push` | GPIO2 |
 | 4848S040C | **Relay 3** | `switch.<device_name>_relay_3` | `button.<device_name>_relay_3_push` | GPIO1 |
-| Waveshare ETH-2RO | **Relay 1** | `switch.<device_name>_relay_1` | `button.<device_name>_relay_1_push` | GPIO32 |
-| Waveshare ETH-2RO | **Relay 2** | `switch.<device_name>_relay_2` | `button.<device_name>_relay_2_push` | GPIO46 |
+| ETH-2RO | **Relay 1** | `switch.<device_name>_relay_1` | `button.<device_name>_relay_1_push` | GPIO32 |
+| ETH-2RO | **Relay 2** | `switch.<device_name>_relay_2` | `button.<device_name>_relay_2_push` | GPIO46 |
 
 They appear as normal Home Assistant entities on the EspControl device. You can control them from Home Assistant dashboards, automations, scripts, and voice assistants.
 
@@ -44,16 +44,16 @@ Use the switch version when the relay should represent an ongoing on/off state. 
 
 ## Using Relays on the Touchscreen
 
-Relay controls on the touchscreen can work locally on the panel. Use an **Internal** card when you want the touchscreen to control the physical relay even if Home Assistant is offline.
+Relay controls on the touchscreen can work locally on the panel. Use an **Internal Switches** card when you want the touchscreen to control the physical relay even if Home Assistant is offline.
 
-Internal cards have two modes:
+Internal Switches cards have two modes:
 
 - **Switch** — looks like a normal Switch card and toggles the selected relay on or off.
 - **Push Button** — looks like a Trigger card and briefly pulses the selected relay.
 
 1. Open the EspControl setup page in your browser.
 2. Choose an empty card slot.
-3. Change the type to **Internal**.
+3. Change the type to **Internal Switches**.
 4. Choose the relay you want to control.
 5. Choose **Switch** or **Push Button** mode.
 6. Save the card configuration.

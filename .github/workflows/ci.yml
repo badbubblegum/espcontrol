@@ -1,9 +1,12 @@
 name: CI
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - '.github/workflows/ci.yml'
+      - '.github/workflows/nightly-firmware.yml'
+      - '.github/workflows/release.yml'
       - 'common/**'
       - 'components/**'
       - 'devices/**'
@@ -17,6 +20,8 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/ci.yml'
+      - '.github/workflows/nightly-firmware.yml'
+      - '.github/workflows/release.yml'
       - 'common/**'
       - 'components/**'
       - 'devices/**'
@@ -29,82 +34,116 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  ESPCONTROL_NPM_CACHE_MAX_MB: 512
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
+  sync-icons:
+    name: Sync Generated Icons
+    if: github.event_name != 'pull_request'
+    runs-on: self-hosted
+    permissions:
+      contents: write
+    outputs:
+      changed: ${{ steps.commit.outputs.changed }}
+    steps:
+      - name: Prepare self-hosted workspace
+        run: |
+          rm -rf "${GITHUB_WORKSPACE:?}/"* "${GITHUB_WORKSPACE:?}/".[!.]* "${GITHUB_WORKSPACE:?}/"..?* 2>/dev/null ||
+            sudo rm -rf "${GITHUB_WORKSPACE:?}/"* "${GITHUB_WORKSPACE:?}/".[!.]* "${GITHUB_WORKSPACE:?}/"..?*
+
+      - uses: actions/checkout@v6
+      - run: git sparse-checkout disable || true
+
+      - name: Generate icon outputs
+        run: python3 scripts/build.py icons
+
+      - name: Commit generated icon outputs
+        id: commit
+        run: |
+          if git diff --quiet -- \
+            common/assets/icon_glyphs.yaml \
+            components/espcontrol/icons.h \
+            src/webserver/www.js; then
+            echo "Generated icon files are already up to date."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            common/assets/icon_glyphs.yaml \
+            components/espcontrol/icons.h \
+            src/webserver/www.js
+          git commit -m "Build generated icon files"
+          git push
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
   validate:
     name: Validate Generated Files
-    runs-on: ubuntu-latest
+    needs: sync-icons
+    if: >-
+      always() &&
+      (github.event_name == 'pull_request' || needs.sync-icons.outputs.changed != 'true')
+    runs-on: self-hosted
     steps:
+      - name: Prepare self-hosted workspace
+        run: |
+          rm -rf "${GITHUB_WORKSPACE:?}/"* "${GITHUB_WORKSPACE:?}/".[!.]* "${GITHUB_WORKSPACE:?}/"..?* 2>/dev/null ||
+            sudo rm -rf "${GITHUB_WORKSPACE:?}/"* "${GITHUB_WORKSPACE:?}/".[!.]* "${GITHUB_WORKSPACE:?}/"..?*
+
       - uses: actions/checkout@v6
+      - run: git sparse-checkout disable || true
 
       - uses: actions/setup-node@v6
         with:
           node-version: 24
 
-      - name: Cache node_modules
-        id: node-modules-cache
-        uses: actions/cache@v5
-        with:
-          path: node_modules
-          key: node-modules-${{ hashFiles('package-lock.json') }}
-
       - name: Install dependencies
-        if: steps.node-modules-cache.outputs.cache-hit != 'true'
-        run: npm ci
+        run: |
+          NPM_CACHE="${HOME}/.cache/espcontrol-actions/npm"
+          mkdir -p "${NPM_CACHE}"
+          npm ci --prefer-offline --cache "${NPM_CACHE}"
+          bash scripts/prune_actions_cache.sh "${NPM_CACHE}" "${ESPCONTROL_NPM_CACHE_MAX_MB}" --strategy reset
 
-      - run: python3 scripts/build.py --check
-      - run: python3 scripts/generate_device_slots.py --check
-      - run: python3 scripts/check_icon_groups.py
-      - run: npm run check:config
+      - name: Install browser runtime
+        run: npx playwright install --with-deps chromium
+
+      - run: npm run check:ci
 
   docs:
     name: Build Docs
-    runs-on: ubuntu-latest
+    needs: [sync-icons, validate]
+    if: >-
+      always() &&
+      needs.validate.result == 'success' &&
+      (github.event_name == 'pull_request' || needs.sync-icons.outputs.changed != 'true')
+    runs-on: self-hosted
     steps:
+      - name: Prepare self-hosted workspace
+        run: |
+          rm -rf "${GITHUB_WORKSPACE:?}/"* "${GITHUB_WORKSPACE:?}/".[!.]* "${GITHUB_WORKSPACE:?}/"..?* 2>/dev/null ||
+            sudo rm -rf "${GITHUB_WORKSPACE:?}/"* "${GITHUB_WORKSPACE:?}/".[!.]* "${GITHUB_WORKSPACE:?}/"..?*
+
       - uses: actions/checkout@v6
+      - run: git sparse-checkout disable || true
 
       - uses: actions/setup-node@v6
         with:
           node-version: 24
 
-      - name: Cache node_modules
-        id: node-modules-cache
-        uses: actions/cache@v5
-        with:
-          path: node_modules
-          key: node-modules-${{ hashFiles('package-lock.json') }}
-
       - name: Install dependencies
-        if: steps.node-modules-cache.outputs.cache-hit != 'true'
-        run: npm ci
+        run: |
+          NPM_CACHE="${HOME}/.cache/espcontrol-actions/npm"
+          mkdir -p "${NPM_CACHE}"
+          npm ci --prefer-offline --cache "${NPM_CACHE}"
+          bash scripts/prune_actions_cache.sh "${NPM_CACHE}" "${ESPCONTROL_NPM_CACHE_MAX_MB}" --strategy reset
 
       - run: npm run docs:build
-
-  compile:
-    name: Compile Firmware (${{ matrix.slug }})
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        slug:
-          - guition-esp32-p4-jc1060p470
-          - guition-esp32-p4-jc4880p443
-          - guition-esp32-p4-jc8012p4a1
-          - esp32-p4-86
-          - guition-esp32-s3-4848s040
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Cache ESPHome build
-        uses: actions/cache@v5
-        with:
-          path: builds/.esphome
-          key: esphome-ci-${{ matrix.slug }}-${{ hashFiles('builds/*.yaml', 'common/**', 'devices/**', 'components/**') }}
-          restore-keys: |
-            esphome-ci-${{ matrix.slug }}-
-
-      - name: Compile firmware
-        run: >-
-          docker run --rm -v "${PWD}:/config"
-          ghcr.io/esphome/esphome:2026.4.5
-          compile /config/builds/${{ matrix.slug }}.factory.yaml

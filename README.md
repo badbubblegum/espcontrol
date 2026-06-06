@@ -27,7 +27,8 @@ EspControl works with devices and helpers that are already in Home Assistant, in
 - Lights, switches, fans, and plugs
 - Scenes, scripts, buttons, and automations
 - Blinds, shutters, covers, and garage doors
-- Climate controls
+- Media players for playback, volume, progress, and now-playing display
+- Climate controls for thermostats and HVAC devices
 - Sensors such as temperature, humidity, power, battery, or custom text states
 - Weather, clocks, dates, and time zones
 - Built-in relays on supported panels
@@ -53,13 +54,13 @@ Start here: [Install EspControl](https://jtenniswood.github.io/espcontrol/gettin
 
 EspControl supports several low-cost ESP32 touchscreens. Larger screens give you more room for controls; smaller screens are useful beside doors, on desks, or in individual rooms.
 
-| 10.1" JC8012P4A1 | 7" JC1060P470 | 4.3" JC4880P443 | 4" Waveshare P4 86 Panel | 4" 4848S040 |
-|:-:|:-:|:-:|:-:|:-:|
-| Image pending | ![7-inch JC1060P470](docs/public/images/jc1060p470-hero.jpg) | ![4.3-inch JC4880P443](docs/public/images/jc4880p443-hero.jpg) | Image pending | ![4-inch 4848S040](docs/public/images/4848s040-hero.jpg) |
-| 1280x800 landscape · 20 card slots | 1024x600 landscape · 15 card slots | 480x800 portrait · 6 card slots | 720x720 square · 9 card slots | 480x480 square · 9 card slots |
-| ESP32-P4 | ESP32-P4 | ESP32-P4 | ESP32-P4 | ESP32-S3 |
-| Guition / AliExpress | [AliExpress ~£40](https://s.click.aliexpress.com/e/_c335W0r5) | [AliExpress ~£24](https://s.click.aliexpress.com/e/_c32jr3eN) | [Waveshare](https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-4b.htm) | [AliExpress ~£16](https://s.click.aliexpress.com/e/_c3sIhvBv) |
-| | [Desk stand (3D print)](https://makerworld.com/en/models/2387421-guition-esp32p4-jc1060p470-7inch-screen-desk-mount#profileId-2614995) | | | [Case stand (3D print)](https://makerworld.com/en/models/2581572-guition-esp32s3-4848s040-case-stand#profileId-2847301) |
+| | 10.1" JC8012P4A1 | 7" JC1060P470 | 4.3" JC4880P443 | 4" ESP32-P4 86 Panel | 4" 4848S040 |
+|---|:-:|:-:|:-:|:-:|:-:|
+| Image | Image pending | ![7-inch JC1060P470](docs/public/images/jc1060p470-hero.jpg) | ![4.3-inch JC4880P443](docs/public/images/jc4880p443-hero.jpg) | Image pending | ![4-inch 4848S040](docs/public/images/4848s040-hero.jpg) |
+| Layout | 1280x800 landscape · 20 card slots | 1024x600 landscape · 15 card slots | 480x800 portrait · 6 card slots | 720x720 square · 9 card slots | 480x480 square · 9 card slots |
+| Processor | ESP32-P4 | ESP32-P4 | ESP32-P4 | ESP32-P4 | ESP32-S3 |
+| Panel | [AliExpress ~£40](https://s.click.aliexpress.com/e/_c4W6TYvp) | [AliExpress ~£40](https://s.click.aliexpress.com/e/_c335W0r5) | [AliExpress ~£24](https://s.click.aliexpress.com/e/_c32jr3eN) | [AliExpress ~£45](https://s.click.aliexpress.com/e/_c3O6ndAX) | [AliExpress ~£16](https://s.click.aliexpress.com/e/_c3sIhvBv) |
+| 3D mount | [MakerWorld](https://makerworld.com/en/models/2490049-guition-p4-10inch-screen-stand#profileId-2736046) | [MakerWorld](https://makerworld.com/en/models/2387421-guition-esp32p4-jc1060p470-7inch-screen-desk-mount#profileId-2614995) | - | [MakerWorld](https://makerworld.com/en/models/2720366-waveshare-esp32-p4-smart-86-box-screen-desk-stand#profileId-3013481) | [MakerWorld](https://makerworld.com/en/models/2581572-guition-esp32s3-4848s040-case-stand#profileId-2847301) |
 
 See the [screen guides](https://jtenniswood.github.io/espcontrol/getting-started/install) for full details on each model.
 
@@ -69,6 +70,7 @@ See the [screen guides](https://jtenniswood.github.io/espcontrol/getting-started
 - **Drag-and-drop layout** - move controls around without editing files.
 - **Subpages** - make folder-like pages for rooms or groups of controls.
 - **Different card sizes** - make important controls larger and keep smaller items compact.
+- **Dedicated card types** - Switch, Lights, Action, Trigger, Sensor, Slider, Cover, Garage Door, Lock, Date & Time, World Clock, Weather, Media, Climate, Internal Switches, and Subpage.
 - **Screensaver and brightness controls** - dim or sleep the display when it is not in use.
 - **Automatic updates** - keep firmware current over WiFi after the first install.
 - **Backup and restore** - save your layout and copy it to another panel.
@@ -87,6 +89,32 @@ See the [screen guides](https://jtenniswood.github.io/espcontrol/getting-started
 - [Install guide](https://jtenniswood.github.io/espcontrol/getting-started/install)
 - [FAQ](https://jtenniswood.github.io/espcontrol/reference/faq)
 - [Report a bug or request a feature](https://github.com/jtenniswood/espcontrol/issues)
+
+## Contributor Checks
+
+After changing card configuration, the web setup page, or generated device files, run:
+
+- `npm run check:product`
+- `npm run check:fast`
+- `npm run check:web-browser-smoke`
+- `npm run docs:build`
+
+Use `npm run check:product` as the focused product preflight when changing shared schema,
+card behavior, web setup behavior, device metadata, generated outputs, backup compatibility,
+or release-facing metadata.
+
+See [Product Source Map](product/README.md) for the files that should be edited by hand
+and the generated outputs that should be rebuilt instead of manually changed.
+
+## License
+
+EspControl is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE).
+
+In plain terms, you can view, change, and share the software for non-commercial purposes. Commercial use needs separate permission from the project owner.
+
+This is a source-available non-commercial license rather than an OSI-approved open source license, because the standard open source definition does not allow restrictions on commercial use.
+
+Required notice: see [NOTICE](NOTICE).
 
 ## Support This Project
 

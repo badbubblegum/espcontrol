@@ -1,8 +1,149 @@
 // Action card: one-tap Home Assistant shortcuts for scenes, scripts, buttons, and helpers.
+var ACTION_CARD_ACTIONS = [
+  { value: "scene.turn_on", label: "Run Scene", placeholder: "e.g. scene.movie_mode", icon: "movie-open", domains: ["scene"] },
+  { value: "script.turn_on", label: "Run Script", placeholder: "e.g. script.goodnight", icon: "script-text-play", domains: ["script"] },
+  { value: "automation.trigger", label: "Trigger Automation", placeholder: "e.g. automation.goodnight", icon: "home-automation", domains: ["automation"] },
+  { value: "button.press", label: "Press Button", placeholder: "e.g. button.restart_router", icon: "gesture-tap-button", domains: ["button"] },
+  { value: "vacuum.start", label: "Start Vacuum", placeholder: "e.g. vacuum.k11_vacuum_784c", icon: "robot-vacuum", domains: ["vacuum"] },
+  { value: "vacuum.return_to_base", label: "Vacuum Return to Base", placeholder: "e.g. vacuum.k11_vacuum_784c", icon: "robot-vacuum", domains: ["vacuum"] },
+  { value: "input_button.press", label: "Press Input Button", placeholder: "e.g. input_button.doorbell", icon: "gesture-tap-button", domains: ["input_button"] },
+  { value: "input_boolean.toggle", label: "Toggle Helper", placeholder: "e.g. input_boolean.guest_mode", icon: "toggle-switch-variant", domains: ["input_boolean"] },
+  { value: "input_number.set_value", label: "Set Number Helper", placeholder: "e.g. input_number.target_level", icon: "counter", domains: ["input_number"] },
+  { value: "input_select.select_option", label: "Option Select", placeholder: "e.g. select.wled_preset", icon: "form-dropdown", domains: ["select", "input_select"] },
+];
+var ACTION_CARD_OPTION_SELECT_ACTION = "input_select.select_option";
+
+function actionCardInfo(value) {
+  for (var i = 0; i < ACTION_CARD_ACTIONS.length; i++) {
+    if (ACTION_CARD_ACTIONS[i].value === value) return ACTION_CARD_ACTIONS[i];
+  }
+  return null;
+}
+
+function actionCardIsOptionSelect(b) {
+  var value = typeof b === "string" ? b : b && b.sensor;
+  return value === ACTION_CARD_OPTION_SELECT_ACTION || value === "select.select_option";
+}
+
+function normalizeActionCardConfig(b) {
+  if (b && b.sensor === "select.select_option") b.sensor = ACTION_CARD_OPTION_SELECT_ACTION;
+  if (!b.sensor) b.sensor = "scene.turn_on";
+  if (!actionCardInfo(b.sensor)) b.sensor = "scene.turn_on";
+  b.precision = "";
+  if (actionCardStateDisplayMode(b) !== "icon") b.icon_on = "Auto";
+  if (actionCardIsOptionSelect(b)) {
+    b.unit = "";
+    b.options = "";
+    if (!b.icon || b.icon === "Auto" || b.icon === "Chevron Down") b.icon = "Flash";
+  }
+}
+
+var ACTION_CARD_STATE_ENTITY_OPTION = "state_entity";
+var ACTION_CARD_STATE_UNIT_OPTION = "state_unit";
+var ACTION_CARD_STATE_PRECISION_OPTION = "state_precision";
+
+function actionCardStateEntity(b) {
+  return configOptionValue(b && b.options, ACTION_CARD_STATE_ENTITY_OPTION);
+}
+
+function actionCardStateUnit(b) {
+  return configOptionValue(b && b.options, ACTION_CARD_STATE_UNIT_OPTION);
+}
+
+function actionCardStatePrecision(b) {
+  var value = configOptionValue(b && b.options, ACTION_CARD_STATE_PRECISION_OPTION);
+  if (value === "icon") return "icon";
+  if (value === "text") return "text";
+  return value === "1" || value === "2" ? value : "0";
+}
+
+function actionCardStateDisplayMode(b) {
+  var rawPrecision = configOptionValue(b && b.options, ACTION_CARD_STATE_PRECISION_OPTION);
+  if (rawPrecision === "icon") return "icon";
+  if (rawPrecision === "text") return "text";
+  if (rawPrecision === "0" || rawPrecision === "1" || rawPrecision === "2" || actionCardStateUnit(b)) {
+    return "numeric";
+  }
+  return actionCardStateEntity(b) ? "text" : "numeric";
+}
+
+function setActionCardStateOptions(b, entity, mode, unit, precision) {
+  if (!b) return "";
+  var options = b.options;
+  entity = String(entity || "").trim();
+  if (!entity) {
+    options = setConfigOptionValue(options, ACTION_CARD_STATE_ENTITY_OPTION, "");
+    options = setConfigOptionValue(options, ACTION_CARD_STATE_UNIT_OPTION, "");
+    options = setConfigOptionValue(options, ACTION_CARD_STATE_PRECISION_OPTION, "");
+    b.options = options;
+    return b.options;
+  }
+  options = setConfigOptionValue(options, ACTION_CARD_STATE_ENTITY_OPTION, entity);
+  if (mode === "icon") {
+    options = setConfigOptionValue(options, ACTION_CARD_STATE_UNIT_OPTION, "");
+    options = setConfigOptionValue(options, ACTION_CARD_STATE_PRECISION_OPTION, "icon");
+  } else if (mode === "text") {
+    options = setConfigOptionValue(options, ACTION_CARD_STATE_UNIT_OPTION, "");
+    options = setConfigOptionValue(options, ACTION_CARD_STATE_PRECISION_OPTION, "text");
+  } else {
+    options = setConfigOptionValue(options, ACTION_CARD_STATE_UNIT_OPTION, unit || "");
+    options = setConfigOptionValue(options, ACTION_CARD_STATE_PRECISION_OPTION, precision || "0");
+  }
+  b.options = options;
+  return b.options;
+}
+
+function actionCardNeedsExtraValue(value) {
+  return value === "input_number.set_value";
+}
+
+var ACTION_CARD_METADATA = {
+  mode: {
+    label: "Action",
+    idSuffix: "action",
+    options: ACTION_CARD_ACTIONS,
+    value: function (b) {
+      return b.sensor || "scene.turn_on";
+    },
+  },
+  entity: {
+    idSuffix: "entity",
+    bindName: "entity",
+    rerender: true,
+    requiredMessage: "Add an entity before saving.",
+  },
+  stateMode: {
+    label: "Type",
+    options: [
+      ["icon", "Icon"],
+      ["numeric", "Numeric"],
+      ["text", "Text"],
+    ],
+  },
+  largeNumbers: {
+    label: "Large State Numbers",
+    idSuffix: "large-state-numbers",
+    supported: function (b) {
+      return !actionCardIsOptionSelect(b) && actionCardStateDisplayMode(b) === "numeric";
+    },
+  },
+  stateUnitField: {
+    label: "Unit",
+    idSuffix: "action-state-unit",
+    placeholder: "e.g. %",
+    bindName: null,
+  },
+  preview: {
+    optionBadge: "chevron-down",
+    actionBadge: "flash",
+  },
+};
+
 registerButtonType("action", {
   label: "Action",
   allowInSubpage: true,
   labelPlaceholder: "e.g. Movie Mode",
+  cardMetadata: ACTION_CARD_METADATA,
   onSelect: function (b) {
     b.entity = "";
     b.sensor = "scene.turn_on";
@@ -10,108 +151,207 @@ registerButtonType("action", {
     b.icon = "Flash";
     b.icon_on = "Auto";
     b.precision = "";
+    b.options = "";
+  },
+  renderSettingsBeforeLabel: function (panel, b, slot, helpers) {
+    normalizeActionCardConfig(b);
+
+    var actionField = helpers.renderCardModeSelector(panel, b, helpers, Object.assign({}, ACTION_CARD_METADATA, {
+      mode: Object.assign({}, ACTION_CARD_METADATA.mode, {
+        onChange: function () {
+          b.sensor = this.value;
+          helpers.saveField("sensor", b.sensor);
+          if (!actionCardNeedsExtraValue(b.sensor)) {
+            b.unit = "";
+            helpers.saveField("unit", "");
+          }
+          if (actionCardIsOptionSelect(b)) {
+            b.options = "";
+            helpers.saveField("options", "");
+          }
+          b.icon_on = "Auto";
+          b.precision = "";
+          helpers.saveField("icon_on", "Auto");
+          helpers.saveField("precision", "");
+          renderButtonSettings();
+        },
+      }),
+    }));
+    var actionSelect = actionField.select;
+    actionSelect.value = b.sensor;
   },
   renderSettings: function (panel, b, slot, helpers) {
-    var actions = [
-      { value: "scene.turn_on", label: "Run Scene", placeholder: "e.g. scene.movie_mode", icon: "movie-open" },
-      { value: "script.turn_on", label: "Run Script", placeholder: "e.g. script.goodnight", icon: "script-text-play" },
-      { value: "automation.trigger", label: "Trigger Automation", placeholder: "e.g. automation.goodnight", icon: "home-automation" },
-      { value: "button.press", label: "Press Button", placeholder: "e.g. button.restart_router", icon: "gesture-tap-button" },
-      { value: "input_button.press", label: "Press Input Button", placeholder: "e.g. input_button.doorbell", icon: "gesture-tap-button" },
-      { value: "lock.open", label: "Open Lock", placeholder: "e.g. lock.front_door", icon: "lock-open" },
-      { value: "input_boolean.toggle", label: "Toggle Helper", placeholder: "e.g. input_boolean.guest_mode", icon: "toggle-switch-variant" },
-      { value: "input_number.set_value", label: "Set Number Helper", placeholder: "e.g. input_number.target_level", icon: "counter" },
-      { value: "input_select.select_option", label: "Select Option Helper", placeholder: "e.g. input_select.house_mode", icon: "form-dropdown" },
-    ];
+    normalizeActionCardConfig(b);
 
-    function actionInfo(value) {
-      for (var i = 0; i < actions.length; i++) {
-        if (actions[i].value === value) return actions[i];
-      }
-      return null;
+    var info = actionCardInfo(b.sensor) || ACTION_CARD_ACTIONS[0];
+    var isOptionSelect = actionCardIsOptionSelect(b);
+    var entityField = helpers.renderCardEntityField(panel, b, helpers, {
+      entity: Object.assign({}, ACTION_CARD_METADATA.entity, {
+        label: isOptionSelect ? "Select Entity" : "Action Entity",
+        placeholder: info.placeholder,
+        domains: info.domains,
+      }),
+    });
+    var entityInp = entityField.input;
+
+    if (actionCardNeedsExtraValue(b.sensor)) {
+      var valueInput = helpers.textInput(
+        helpers.idPrefix + "action-value",
+        b.unit,
+        "e.g. 50"
+      );
+      var valueLabel = helpers.fieldLabel("Value", helpers.idPrefix + "action-value");
+      var valueField = document.createElement("div");
+      valueField.className = "sp-field";
+      valueField.appendChild(valueLabel);
+      valueField.appendChild(valueInput);
+      panel.appendChild(valueField);
+      helpers.bindField(valueInput, "unit", true);
     }
 
-    if (!b.sensor) b.sensor = "scene.turn_on";
-    if (!actionInfo(b.sensor)) b.sensor = "scene.turn_on";
-    b.icon_on = "Auto";
-    b.precision = "";
-
-    var af = document.createElement("div");
-    af.className = "sp-field";
-    af.appendChild(helpers.fieldLabel("Action", helpers.idPrefix + "action"));
-    var actionSelect = document.createElement("select");
-    actionSelect.className = "sp-select";
-    actionSelect.id = helpers.idPrefix + "action";
-    for (var ai = 0; ai < actions.length; ai++) {
-      var opt = document.createElement("option");
-      opt.value = actions[ai].value;
-      opt.textContent = actions[ai].label;
-      actionSelect.appendChild(opt);
+    if (!isOptionSelect) {
+      helpers.renderCardIconPicker(panel, b, helpers, {
+        pickerIdSuffix: "icon-picker",
+        idSuffix: "icon",
+        field: "icon",
+        fallback: "Flash",
+      });
     }
-    actionSelect.value = b.sensor;
-    af.appendChild(actionSelect);
-    panel.appendChild(af);
 
-    var ef = document.createElement("div");
-    ef.className = "sp-field";
-    var entityLabel = helpers.fieldLabel("Entity ID", helpers.idPrefix + "entity");
-    ef.appendChild(entityLabel);
-    var entityInp = helpers.textInput(helpers.idPrefix + "entity", b.entity, actionInfo(b.sensor).placeholder);
-    ef.appendChild(entityInp);
-    panel.appendChild(ef);
-    helpers.bindField(entityInp, "entity", true);
-    helpers.requireField(entityInp, "Add an entity before saving.");
+    entityInp._entityDomains = info.domains || [];
+    refreshEntityDatalist(entityInp);
+    if (isOptionSelect) return;
 
-    var valueField = document.createElement("div");
-    valueField.className = "sp-field";
-    var valueLabel = helpers.fieldLabel("Value", helpers.idPrefix + "action-value");
-    valueField.appendChild(valueLabel);
-    var valueInp = helpers.textInput(helpers.idPrefix + "action-value", b.unit, "e.g. 50");
-    valueField.appendChild(valueInp);
-    panel.appendChild(valueField);
-    helpers.bindField(valueInp, "unit", true);
+    var stateEntity = actionCardStateEntity(b);
+    var stateMode = actionCardStateDisplayMode(b);
+    var stateUnit = actionCardStateUnit(b);
+    var statePrecision = actionCardStatePrecision(b);
 
-    panel.appendChild(helpers.makeIconPicker(
-      helpers.idPrefix + "icon-picker", helpers.idPrefix + "icon",
-      b.icon || "Flash", function (opt) {
-        b.icon = opt;
-        helpers.saveField("icon", opt);
+    var mode = helpers.renderCardSegmentControl(panel, b, helpers, {
+      segment: Object.assign({}, ACTION_CARD_METADATA.stateMode, {
+        value: function () { return stateMode; },
+        onSelect: function (button, cardHelpers, value) {
+          setStateMode(value, true);
+        },
+      }),
+    });
+    var iconBtn = mode.buttons.icon;
+    var numericBtn = mode.buttons.numeric;
+    var textBtn = mode.buttons.text;
+
+    var stateEntityField = helpers.renderCardEntityField(panel, b, helpers, {
+      entity: {
+        label: "Sensor Entity",
+        idSuffix: "action-state-entity",
+        value: function () { return stateEntity; },
+        placeholder: "e.g. sensor.printer_percent_complete",
+        domains: ["sensor", "binary_sensor", "text_sensor"],
+        bindName: null,
+        rerender: false,
+      },
+    });
+    var stateEntityInp = stateEntityField.input;
+
+    var iconOnSection = helpers.renderCardIconPicker(panel, b, helpers, {
+      pickerIdSuffix: "icon-on-picker",
+      idSuffix: "icon-on",
+      field: "icon_on",
+      fallback: "Auto",
+      label: "On Icon",
+    });
+
+    var numericSection = condField();
+    var stateUnitField = helpers.renderCardTextField(numericSection, b, helpers, Object.assign({}, ACTION_CARD_METADATA.stateUnitField, {
+      value: function () { return stateUnit; },
+    }));
+    var stateUnitInp = stateUnitField.input;
+
+    var statePrecisionField = helpers.precisionField(
+      helpers.idPrefix + "action-state-precision",
+      stateMode === "numeric" ? statePrecision : "0",
+      function () {
+        statePrecision = this.value || "0";
+        saveStateOptions();
       }
-    ));
+    );
+    var statePrecisionSelect = statePrecisionField.select;
+    numericSection.appendChild(statePrecisionField.field);
+    helpers.renderCardLargeNumbersToggle(numericSection, b, helpers, ACTION_CARD_METADATA);
+    panel.appendChild(numericSection);
 
-    function updateForAction(persist) {
-      var info = actionInfo(actionSelect.value) || actions[0];
-      entityInp.placeholder = info.placeholder;
-      var needsValue = actionSelect.value === "input_number.set_value";
-      var needsOption = actionSelect.value === "input_select.select_option";
-      valueField.style.display = needsValue || needsOption ? "" : "none";
-      valueLabel.textContent = needsOption ? "Option" : "Value";
-      valueInp.placeholder = needsOption ? "e.g. Away" : "e.g. 50";
+    function saveStateOptions() {
+      stateEntity = stateEntityInp.value;
+      stateUnit = stateUnitInp.value;
+      helpers.saveField("options", setActionCardStateOptions(
+        b, stateEntity, stateMode, stateUnit, statePrecision));
+    }
+
+    function setStateMode(modeValue, persist) {
+      stateMode = modeValue === "icon" || modeValue === "text" ? modeValue : "numeric";
+      iconBtn.classList.toggle("active", stateMode === "icon");
+      numericBtn.classList.toggle("active", stateMode === "numeric");
+      textBtn.classList.toggle("active", stateMode === "text");
+      iconOnSection.style.display = stateMode === "icon" ? "" : "none";
+      numericSection.classList.toggle("sp-visible", stateMode === "numeric");
       if (!persist) return;
-      b.sensor = actionSelect.value;
-      helpers.saveField("sensor", b.sensor);
-      if (!needsValue && !needsOption) {
-        b.unit = "";
-        valueInp.value = "";
-        helpers.saveField("unit", "");
+      if (stateMode === "icon" || stateMode === "text") {
+        stateUnit = "";
+        stateUnitInp.value = "";
+        statePrecision = "0";
+        statePrecisionSelect.value = "0";
       }
-      b.icon_on = "Auto";
-      b.precision = "";
-      helpers.saveField("icon_on", "Auto");
-      helpers.saveField("precision", "");
+      if (stateMode !== "icon") {
+        b.icon_on = "Auto";
+        helpers.saveField("icon_on", "Auto");
+      }
+      saveStateOptions();
     }
 
-    actionSelect.addEventListener("change", function () { updateForAction(true); });
-    updateForAction(false);
+    setStateMode(stateMode, false);
+
+    stateEntityInp.addEventListener("input", saveStateOptions);
+    stateEntityInp.addEventListener("change", saveStateOptions);
+    stateEntityInp.addEventListener("blur", saveStateOptions);
+    stateEntityInp.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        saveStateOptions();
+        this.blur();
+      }
+    });
+    stateUnitInp.addEventListener("input", saveStateOptions);
+    stateUnitInp.addEventListener("change", saveStateOptions);
+    stateUnitInp.addEventListener("blur", saveStateOptions);
+    stateUnitInp.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        saveStateOptions();
+        this.blur();
+      }
+    });
   },
   renderPreview: function (b, helpers) {
     var label = b.label || b.entity || "Action";
+    if (actionCardIsOptionSelect(b)) {
+      return {
+        iconHtml: cardSensorPreviewHtml(b, helpers, "Option", null),
+        labelHtml: cardBadgeLabelHtml(helpers, label, ACTION_CARD_METADATA.preview.optionBadge),
+      };
+    }
     var iconName = b.icon && b.icon !== "Auto" ? iconSlug(b.icon) : "flash";
+    if (actionCardStateEntity(b) && actionCardStateDisplayMode(b) === "numeric" && cardLargeNumbersEnabled(b)) {
+      return {
+        iconHtml: cardSensorPreviewHtml(b, helpers, "42", actionCardStateUnit(b) || ""),
+        labelHtml: cardBadgeLabelHtml(helpers, label, ACTION_CARD_METADATA.preview.actionBadge),
+      };
+    }
+    var stateBadge = actionCardStateEntity(b)
+      ? '<span class="sp-sensor-badge mdi mdi-' +
+        (actionCardStateDisplayMode(b) === "icon" ? "toggle-switch" :
+          (actionCardStateDisplayMode(b) === "text" ? "format-text" : "gauge")) +
+        '"></span>'
+      : "";
     return {
-      iconHtml: '<span class="sp-btn-icon mdi mdi-' + iconName + '"></span>',
-      labelHtml:
-        '<span class="sp-btn-label-row"><span class="sp-btn-label">' + helpers.escHtml(label) + '</span>' +
-        '<span class="sp-type-badge mdi mdi-flash"></span></span>',
+      iconHtml: stateBadge + '<span class="sp-btn-icon mdi mdi-' + iconName + '"></span>',
+      labelHtml: cardBadgeLabelHtml(helpers, label, ACTION_CARD_METADATA.preview.actionBadge),
     };
   },
 });

@@ -17,16 +17,14 @@ function timezoneCardTimeParts(tzOption) {
     var parts = new Intl.DateTimeFormat("en-US", opts).formatToParts(new Date());
     var hour = "";
     var minute = "";
-    var dayPeriod = "";
     for (var i = 0; i < parts.length; i++) {
       if (parts[i].type === "hour") hour = parts[i].value;
       else if (parts[i].type === "minute") minute = parts[i].value;
-      else if (parts[i].type === "dayPeriod") dayPeriod = parts[i].value;
     }
     if (!hour || !minute) return { value: "--:--", unit: "" };
     return {
       value: (use12h ? hour : hour.padStart(2, "0")) + ":" + minute,
-      unit: use12h ? dayPeriod.toLowerCase().replace(/\./g, "") : "",
+      unit: "",
     };
   } catch (e) {
     return { value: "--:--", unit: "" };
@@ -34,38 +32,44 @@ function timezoneCardTimeParts(tzOption) {
 }
 
 registerButtonType("timezone", {
-  label: "World Clock",
-  allowInSubpage: true,
+  label: function () { return cardContractCardLabel("timezone"); },
+  allowInSubpage: function () { return cardContractAllowInSubpage("timezone"); },
+  pickerKey: function () { return cardContractPickerKey("timezone"); },
+  experimental: function () { return cardContractExperimental("timezone"); },
+  hidden: function () { return cardContractHidden("timezone"); },
   hideLabel: true,
+  defaultConfig: function () { return cardContractDefaultConfig("timezone"); },
+  isAvailable: function () {
+    return false;
+  },
+  cardMetadata: DATE_TIME_CARD_METADATA,
   onSelect: function (b) {
-    b.entity = (typeof state !== "undefined" && state.timezone) || "UTC (GMT+0)";
+    b.entity = defaultTimezoneCardEntity();
     b.label = "";
     b.icon = "Auto";
     b.icon_on = "Auto";
     b.sensor = "";
     b.unit = "";
     b.precision = "";
+    b.options = "";
   },
   renderSettings: function (panel, b, slot, helpers) {
-    if (!b.entity) b.entity = (typeof state !== "undefined" && state.timezone) || "UTC (GMT+0)";
+    if (!b.entity) b.entity = defaultTimezoneCardEntity();
     if (b.label) {
       b.label = "";
       helpers.saveField("label", "");
     }
 
-    var tzField = document.createElement("div");
-    tzField.className = "sp-field";
-    tzField.appendChild(helpers.fieldLabel("City / Timezone", helpers.idPrefix + "timezone"));
+    helpers.renderCardModeSelector(panel, b, helpers, DATE_TIME_CARD_METADATA);
+    helpers.renderCardLargeNumbersToggle(panel, b, helpers, DATE_TIME_CARD_METADATA);
 
     var tzSelect = document.createElement("select");
     tzSelect.className = "sp-select";
     tzSelect.id = helpers.idPrefix + "timezone";
 
-    var options = [];
-    if (typeof state !== "undefined" && state.timezoneOptions.length) {
-      options = state.timezoneOptions.slice();
-    }
-    if (options.indexOf(b.entity) === -1) options.unshift(b.entity);
+    var options = typeof state !== "undefined"
+      ? timezoneOptionsWithFallback(state.timezoneOptions, b.entity)
+      : [b.entity];
 
     options.forEach(function (opt) {
       appendTimezoneOption(tzSelect, opt);
@@ -78,22 +82,16 @@ registerButtonType("timezone", {
       helpers.saveField("label", "");
     });
 
-    tzField.appendChild(tzSelect);
-    panel.appendChild(tzField);
+    panel.appendChild(helpers.fieldWithControl("City / Timezone", helpers.idPrefix + "timezone", tzSelect));
   },
   renderPreview: function (b, helpers) {
     var tz = b.entity || (typeof state !== "undefined" && state.timezone) || "UTC (GMT+0)";
     var time = timezoneCardTimeParts(tz);
+    var hideLabel = cardLargeNumbersHidePreviewLabel(b, helpers, DATE_TIME_CARD_METADATA);
     return {
-      iconHtml:
-        '<span class="sp-sensor-preview">' +
-          '<span class="sp-sensor-value">' + helpers.escHtml(time.value) + '</span>' +
-          '<span class="sp-sensor-unit">' + helpers.escHtml(time.unit) + '</span>' +
-        '</span>',
-      labelHtml:
-        '<span class="sp-btn-label-row"><span class="sp-btn-label">' +
-          helpers.escHtml(timezoneCardCityLabel(tz)) +
-        '</span><span class="sp-type-badge mdi mdi-map-clock"></span></span>',
+      buttonClass: hideLabel ? "sp-date-time-wide-large" : undefined,
+      iconHtml: cardSensorPreviewHtml(b, helpers, time.value, time.unit),
+      labelHtml: hideLabel ? "" : cardBadgeLabelHtml(helpers, timezoneCardCityLabel(tz), DATE_TIME_CARD_METADATA.preview.timezoneBadge),
     };
   },
 });

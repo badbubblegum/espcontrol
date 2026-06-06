@@ -10,6 +10,8 @@ Your EspControl panel has a built-in web page where you can set everything up. O
 
 ![Screen setup page](/images/screen-setup.png)
 
+![Webserver card grid with examples of lights, climate, media, weather, covers, locks, actions, sensors, and date cards](/images/webserver-card-gallery.png)
+
 ::: tip Finding the address
 The address is shown on the display screen when no cards are configured yet. You can also find it in your router's connected devices list, or in Home Assistant under **Settings > Devices & Services > ESPHome**.
 :::
@@ -20,6 +22,8 @@ Tap any empty space in the grid (shown as a dashed outline with a **+** icon). A
 
 ![Card settings panel](/images/button-settings.png)
 
+![Light card settings panel showing card type, entity, label, and icon fields](/images/settings-panel-light-card.png)
+
 ![Switch card showing a Heater icon](/images/card-toggle.png)
 
 The **Type** dropdown uses these card names on the device:
@@ -27,19 +31,29 @@ The **Type** dropdown uses these card names on the device:
 | Type | What it does | Needs an entity? |
 |---|---|---|
 | **[Switch](/card-types/switches)** | Controls a Home Assistant entity and shows its on/off state. This is the default card type. | Yes |
-| **[Action](/card-types/actions)** | Runs a one-tap Home Assistant scene, script, button, or helper action. | Yes |
+| **[Lights](/card-types/lights)** | Controls a light as a switch, brightness slider, or colour temperature slider. | Yes, as a light entity |
+| **[Action](/card-types/actions)** | Runs a one-tap Home Assistant scene, script, button, helper action, or Option Select picker. | Yes |
+| **[Webhook](/card-types/webhooks)** | Calls an HTTP URL directly from the panel for other automation platforms and webhook services. | URL |
 | **[Trigger](/card-types/buttons)** | Fires an event to Home Assistant for use in automations. | No |
-| **[Sensor](/card-types/sensors)** | Shows a live numeric reading or text state. | Yes, as **Sensor Entity** |
+| **[Sensor](/card-types/sensors)** | Shows a live numeric reading, text state, or icon state. | Yes, as **Sensor Entity** |
+| **[Doors & Windows](/card-types/doors-windows)** | Shows a door or window contact sensor with open and closed icons. | Yes, as **Sensor Entity** |
+| **[Presence](/card-types/presence)** | Shows whether a person, room, or motion sensor is active. | Yes, as **Sensor Entity** |
 | **[Slider](/card-types/sliders)** | Controls light brightness or fan speed with a draggable fill bar. | Yes |
 | **[Cover](/card-types/covers)** | Controls blinds, shutters, and similar cover entities with a slider or tap action. | Yes |
 | **[Garage Door](/card-types/garage-doors)** | Controls a garage door cover entity with an open/close tap action. | Yes |
-| **[Date](/card-types/calendar)** | Shows the local date, or the date and time. | No |
-| **[World Clock](/card-types/timezones)** | Shows the current time for another city. | No, choose a city/timezone |
-| **[Weather](/card-types/weather)** | Shows the current condition or tomorrow's forecast from a weather entity. | Yes, as **Weather Entity** |
-| **[Internal](/card-types/internal-relays)** | Controls a built-in relay locally on panels that have relay hardware. | Choose a relay |
+| **[Lock](/card-types/locks)** | Locks, unlocks, or toggles a Home Assistant lock entity. | Yes |
+| **[Date & Time](/card-types/calendar)** | Shows the local clock, date, date and time, or a world clock. | No |
+| **[Weather](/card-types/weather)** | Shows the current condition or today's/tomorrow's forecast from a weather entity. | Yes, as **Weather Entity** |
+| **[Media](/card-types/media)** | Controls playback, volume, track position, or now-playing details for a media player. | Yes, as a media player entity |
+| **[Climate](/card-types/climate)** | Controls a Home Assistant thermostat or HVAC entity. | Yes, as a climate entity |
+| **[Internal Switches](/card-types/internal-relays)** | Controls a built-in relay locally on panels that have relay hardware. | Choose a relay |
 | **[Subpage](/features/subpages)** | Opens a folder-like page of extra cards. | No |
 
-For cards that use Home Assistant, enter the entity name from Home Assistant, such as `light.living_room`, `switch.garden_lights`, `scene.movie_mode`, or `weather.forecast_home`. You can find entity names under **Settings > Devices & Services** in Home Assistant.
+For cards that use Home Assistant, enter the entity name from Home Assistant in the **Entity** field, such as `light.living_room`, `switch.garden_lights`, `scene.movie_mode`, or `weather.forecast_home`. Some card types use a more specific label, such as **Sensor Entity**, **Weather Entity**, or **Climate Entity**. You can find entity names under **Settings > Devices & Services** in Home Assistant.
+
+Some card names group several related controls together. **Lights** contains Switch, Brightness, and Colour Temperature options. **Action** contains scene, script, helper, vacuum, and Option Select actions. **Date & Time** contains Clock, Date, Time & Date, and World Clock options.
+
+For the generated list of current card domains, subpage support, grouping, and options, see the [Card Capability Reference](/generated/cards/capabilities).
 
 Most cards also let you choose an icon and set a label. If the label is left blank, the panel uses the friendly name from Home Assistant when it can.
 
@@ -47,7 +61,7 @@ Most cards also let you choose an icon and set a label. If the label is left bla
 
 Each [Switch](/card-types/switches) card has separate **Off Icon** and **On Icon** settings. The on icon is used while the entity is active.
 
-You can also turn on **Show sensor data when on**:
+You can also turn on **Active Display**:
 
 - **Numeric** — show a live reading instead of the icon, for example temperature, power usage, or a percentage. Pick the **Sensor Entity**, **Unit**, and **Unit Precision**.
 - **Text** — show a live text state instead of the label, for example a machine status or current mode.
@@ -71,7 +85,9 @@ If a card already occupies the space needed for a larger size, the setup page tr
 
 ## Device Settings
 
-The **Settings** tab also includes display, brightness, screensaver, backup, firmware update, and Bluetooth proxy controls. Bluetooth proxy remains off by default; see [Bluetooth Proxy](/features/bluetooth-proxy) for details.
+The **Settings** tab also includes display, brightness, screensaver, backup, and firmware update controls.
+
+![Settings tab showing appearance, backlight, schedule, clock, and firmware controls](/images/settings-tab-display.png)
 
 ## Apply Configuration
 

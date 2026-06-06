@@ -16,12 +16,58 @@ lvgl:
     widgets:
       # Indoor/outdoor temperature (top-left)
       - label:
-          text: "-°C / -°C"
+          text: "-°C"
           id: temperatures
-          text_font: clockbar_font_lt
+          text_font: font_text_body
           align: top_left
           x: 8
-          y: 8
+          y: 5
+          text_color: 0xFFFFFF
+          hidden: true
+
+      - label:
+          text: "-°C"
+          id: temperature_2
+          text_font: font_text_body
+          align: top_left
+          x: 0
+          y: 0
+          text_color: 0xFFFFFF
+          hidden: true
+      - label:
+          text: "-°C"
+          id: temperature_3
+          text_font: font_text_body
+          align: top_left
+          x: 0
+          y: 0
+          text_color: 0xFFFFFF
+          hidden: true
+      - label:
+          text: "-°C"
+          id: temperature_4
+          text_font: font_text_body
+          align: top_left
+          x: 0
+          y: 0
+          text_color: 0xFFFFFF
+          hidden: true
+      - label:
+          text: "-°C"
+          id: temperature_5
+          text_font: font_text_body
+          align: top_left
+          x: 0
+          y: 0
+          text_color: 0xFFFFFF
+          hidden: true
+      - label:
+          text: "-°C"
+          id: temperature_6
+          text_font: font_text_body
+          align: top_left
+          x: 0
+          y: 0
           text_color: 0xFFFFFF
           hidden: true
 
@@ -29,13 +75,52 @@ lvgl:
       - label:
           text: "--:--"
           id: display_time
-          text_font: clockbar_font_lt
+          text_font: font_text_body
           align: top_mid
           x: 0
-          y: 8
+          y: 5
           text_align: center
           text_color: 0xFFFFFF
           hidden: true
+
+      # Weather status (small icon in the clock bar)
+      - label:
+          text: "\U000F0590"
+          id: clock_bar_weather_icon_label
+          text_font: font_icon_status
+          align: top_right
+          x: -16
+          y: 1
+          text_align: center
+          text_color: 0xFFFFFF
+          hidden: true
+
+      # Network status (tappable, right side of clock bar)
+      - obj:
+          id: network_status_button
+          align: top_right
+          x: -16
+          y: 1
+          width: 38
+          height: 34
+          bg_opa: 0%
+          border_width: 0
+          pad_all: 0
+          scrollable: false
+          scrollbar_mode: "off"
+          clickable: true
+          hidden: true
+          widgets:
+            - label:
+                id: network_status_icon_label
+                text: "\U000F0928"
+                text_font: font_icon_status
+                align: center
+                text_align: center
+                text_color: 0xFFFFFF
+          on_press:
+            then:
+              - script.execute: network_status_open_info
 
   # ---------------------------------------------------------------------------
   # Main page (fixed 5-column x 4-row grid of button widgets)

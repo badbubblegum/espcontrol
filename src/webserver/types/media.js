@@ -1,10 +1,118 @@
 // Media player card: playback buttons, volume, track position, or now-playing details.
+function mediaBehaviorSpec() {
+  var card = cardContractCard("media");
+  return card && card.behavior && card.behavior.media || {};
+}
+
+function mediaModeOptionValues() {
+  var spec = cardContractOptionSpec("media", "media_mode");
+  return spec && spec.values ? spec.values.slice() :
+    ["play_pause", "previous", "next", "volume", "position", "now_playing"];
+}
+
+function mediaDefaultMode() {
+  return mediaBehaviorSpec().defaultMode || "play_pause";
+}
+
+function mediaEditorMode(value) {
+  value = String(value || "");
+  var legacy = mediaBehaviorSpec().legacyModes || {};
+  value = legacy[value] || value;
+  return mediaModeOptionValues().indexOf(value) >= 0 ? value : mediaDefaultMode();
+}
+
+function mediaEditorValidMode(value) {
+  return mediaEditorMode(value);
+}
+
+function mediaNowPlayingControls(b) {
+  if (!b || b.sensor !== "now_playing") return "";
+  return mediaNowPlayingControlValues().indexOf(b.precision || "") >= 0 ? b.precision : "";
+}
+
+function mediaNowPlayingControlValues() {
+  var spec = cardContractOptionSpec("media", "media_now_playing_controls");
+  return spec && spec.values ? spec.values.slice() : ["", "progress", "play_pause"];
+}
+
+function mediaStateDisplayModeSupported(mode) {
+  var modes = mediaBehaviorSpec().stateDisplayModes || ["play_pause", "position"];
+  return modes.indexOf(mediaEditorMode(mode)) >= 0;
+}
+
+function mediaNowPlayingProgressEnabled(b) {
+  return mediaNowPlayingControls(b) === "progress";
+}
+
+function mediaNowPlayingPlayPauseEnabled(b) {
+  return mediaNowPlayingControls(b) === "play_pause";
+}
+
+var MEDIA_CARD_METADATA = {
+  mode: {
+    label: "Type",
+    idSuffix: "media-mode",
+    options: [
+      ["play_pause", "Play/Pause Button"],
+      ["previous", "Previous Button"],
+      ["next", "Next Button"],
+      ["volume", "Volume Button"],
+      ["position", "Track Position"],
+      ["now_playing", "Now Playing"],
+    ],
+    value: function (b) {
+      return mediaEditorValidMode(b.sensor);
+    },
+  },
+  entity: {
+    label: "Entity",
+    idSuffix: "entity",
+    placeholder: "e.g. media_player.living_room",
+    domains: function () { return cardContractDomains("media"); },
+    bindName: "entity",
+    rerender: true,
+    requiredMessage: "Add an entity before saving.",
+  },
+  displayMode: {
+    label: "Type",
+    inputId: "media-display",
+    options: [
+      ["", "Label"],
+      ["state", "State"],
+    ],
+  },
+  nowPlayingControls: {
+    label: "Controls",
+    inputId: "media-controls",
+    options: [
+      ["", "None"],
+      ["progress", "Track Position"],
+      ["play_pause", "Play/Pause"],
+    ],
+  },
+  largeNumbers: {
+    label: "Large Media Numbers",
+    idSuffix: "large-media-numbers",
+    supported: function (b) {
+      var mode = mediaEditorMode(b && b.sensor);
+      return mode === "volume" || mode === "position";
+    },
+  },
+  preview: {
+    badge: "speaker",
+  },
+};
+
 registerButtonType("media", {
-  label: "Media",
-  experimental: "media",
-  allowInSubpage: true,
+  label: function () { return cardContractCardLabel("media"); },
+  allowInSubpage: function () { return cardContractAllowInSubpage("media"); },
+  pickerKey: function () { return cardContractPickerKey("media"); },
+  experimental: function () { return cardContractExperimental("media"); },
+  hidden: function () { return cardContractHidden("media"); },
   hideLabel: true,
   labelPlaceholder: "e.g. Living Room Speaker",
+  defaultConfig: function () { return cardContractDefaultConfig("media"); },
+  cardMetadata: MEDIA_CARD_METADATA,
   onSelect: function (b) {
     b.entity = "";
     b.sensor = "play_pause";
@@ -12,27 +120,15 @@ registerButtonType("media", {
     b.precision = (b.sensor === "play_pause" || b.sensor === "position") && b.precision === "state" ? "state" : "";
     b.icon = "Auto";
     b.icon_on = "Auto";
+    b.options = "";
   },
   renderSettingsBeforeLabel: function (panel, b, slot, helpers) {
-    var modes = [
-      ["play_pause", "Play/Pause Button"],
-      ["previous", "Previous Button"],
-      ["next", "Next Button"],
-      ["volume", "Volume Button"],
-      ["position", "Track Position"],
-      ["now_playing", "Now Playing"],
-    ];
-
     function validMode(value) {
-      if (value === "controls") return "play_pause";
-      for (var i = 0; i < modes.length; i++) {
-        if (modes[i][0] === value) return value;
-      }
-      return "play_pause";
+      return mediaEditorValidMode(value);
     }
 
     function mediaDefaultIcon(value) {
-      var mode = validMode(value);
+      var mode = mediaEditorMode(value);
       if (mode === "previous") return "Skip Previous";
       if (mode === "next") return "Skip Next";
       if (mode === "volume") return "Volume High";
@@ -48,7 +144,7 @@ registerButtonType("media", {
     }
 
     function mediaActionLabel(value) {
-      var mode = validMode(value);
+      var mode = mediaEditorMode(value);
       if (mode === "previous") return "Previous";
       if (mode === "next") return "Next";
       if (mode === "volume") return "Volume";
@@ -60,63 +156,67 @@ registerButtonType("media", {
     b.sensor = validMode(b.sensor);
     if (rawMode === "controls" && isMediaDefaultIcon(rawMode, b.icon)) b.icon = "Auto";
 
-    var mf = document.createElement("div");
-    mf.className = "sp-field";
-    mf.appendChild(helpers.fieldLabel("Media Mode", helpers.idPrefix + "media-mode"));
-    var modeSelect = document.createElement("select");
-    modeSelect.className = "sp-select";
-    modeSelect.id = helpers.idPrefix + "media-mode";
-    modes.forEach(function (entry) {
-      var opt = document.createElement("option");
-      opt.value = entry[0];
-      opt.textContent = entry[1];
-      modeSelect.appendChild(opt);
-    });
-    modeSelect.value = b.sensor;
-    modeSelect.addEventListener("change", function () {
-      var oldMode = b.sensor;
-      b.sensor = validMode(this.value);
-      if (isMediaDefaultIcon(oldMode, b.icon)) {
-        b.icon = "Auto";
-        helpers.saveField("icon", b.icon);
-      }
-      if (b.sensor !== "play_pause" && b.sensor !== "position" && b.precision) {
-        b.precision = "";
-        helpers.saveField("precision", "");
-      }
-      if (b.sensor === "previous" || b.sensor === "next") {
-        b.label = mediaActionLabel(b.sensor);
-        b.icon = mediaDefaultIcon(b.sensor);
-        helpers.saveField("label", b.label);
-        helpers.saveField("icon", b.icon);
-      }
-      if (b.sensor === "volume") {
-        var oldDefaultLabel = mediaActionLabel(oldMode);
-        if (!b.label || b.label === oldDefaultLabel || b.label === "Media") {
-          b.label = mediaActionLabel(b.sensor);
-          helpers.saveField("label", b.label);
-        }
-        b.icon = "Auto";
-        helpers.saveField("icon", b.icon);
-      }
-      helpers.saveField("sensor", b.sensor);
-      renderButtonSettings();
-    });
-    mf.appendChild(modeSelect);
-    panel.appendChild(mf);
+    helpers.renderCardModeSelector(panel, b, helpers, Object.assign({}, MEDIA_CARD_METADATA, {
+      mode: Object.assign({}, MEDIA_CARD_METADATA.mode, {
+        onChange: function () {
+          var oldMode = b.sensor;
+          b.sensor = validMode(this.value);
+          if (isMediaDefaultIcon(oldMode, b.icon)) {
+            b.icon = "Auto";
+            helpers.saveField("icon", b.icon);
+          }
+          if (b.sensor === "now_playing") {
+            b.precision = mediaNowPlayingControls(b);
+            helpers.saveField("precision", b.precision);
+          } else if (b.sensor === "play_pause" || b.sensor === "position") {
+            b.precision = b.precision === "state" ? "state" : "";
+            helpers.saveField("precision", b.precision);
+          } else if (b.precision) {
+            b.precision = "";
+            helpers.saveField("precision", "");
+          }
+          if (b.sensor === "previous" || b.sensor === "next") {
+            b.label = mediaActionLabel(b.sensor);
+            b.icon = mediaDefaultIcon(b.sensor);
+            helpers.saveField("label", b.label);
+            helpers.saveField("icon", b.icon);
+          }
+          if (b.sensor === "volume") {
+            var oldDefaultLabel = mediaActionLabel(oldMode);
+            if (!b.label || b.label === oldDefaultLabel || b.label === "Media") {
+              b.label = mediaActionLabel(b.sensor);
+              helpers.saveField("label", b.label);
+            }
+            b.icon = "Auto";
+            helpers.saveField("icon", b.icon);
+          }
+          var normalizedOptions = normalizeMediaOptions(b.options, b.sensor);
+          if (b.options !== normalizedOptions) {
+            b.options = normalizedOptions;
+            helpers.saveField("options", b.options);
+          }
+          helpers.saveField("sensor", b.sensor);
+          renderButtonSettings();
+        },
+      }),
+    }));
   },
   renderSettings: function (panel, b, slot, helpers) {
     function validMode(value) {
-      if (value === "controls") return "play_pause";
-      if (value === "previous" || value === "next" || value === "volume" ||
-          value === "position" || value === "now_playing") return value;
-      return "play_pause";
+      return mediaEditorValidMode(value);
     }
 
     b.sensor = validMode(b.sensor);
     b.unit = "";
-    b.precision = (b.sensor === "play_pause" || b.sensor === "position") && b.precision === "state" ? "state" : "";
+    b.precision = b.sensor === "now_playing"
+      ? mediaNowPlayingControls(b)
+      : ((b.sensor === "play_pause" || b.sensor === "position") && b.precision === "state" ? "state" : "");
     b.icon_on = "Auto";
+    var normalizedOptions = normalizeMediaOptions(b.options, b.sensor);
+    if (b.options !== normalizedOptions) {
+      b.options = normalizedOptions;
+      helpers.saveField("options", b.options);
+    }
     if (b.sensor === "previous" && b.label === "Skip Previous") {
       b.label = "Previous";
       helpers.saveField("label", b.label);
@@ -142,24 +242,24 @@ registerButtonType("media", {
     if (b.sensor === "previous" && (!b.icon || b.icon === "Auto")) b.icon = "Skip Previous";
     if (b.sensor === "next" && (!b.icon || b.icon === "Auto")) b.icon = "Skip Next";
 
-    var ef = document.createElement("div");
-    ef.className = "sp-field";
-    ef.appendChild(helpers.fieldLabel("Media Player Entity", helpers.idPrefix + "entity"));
-    var entityInp = helpers.textInput(helpers.idPrefix + "entity", b.entity, "e.g. media_player.living_room");
-    ef.appendChild(entityInp);
-    panel.appendChild(ef);
-    helpers.bindField(entityInp, "entity", true);
-    helpers.requireField(entityInp, "Add an entity before saving.");
+    helpers.renderCardEntityField(panel, b, helpers, MEDIA_CARD_METADATA);
 
-    var displayField = document.createElement("div");
-    var labelModeBtn = document.createElement("button");
-    var stateModeBtn = document.createElement("button");
+    var displayMode = helpers.renderCardSegmentControl(panel, b, helpers, {
+      segment: Object.assign({}, MEDIA_CARD_METADATA.displayMode, {
+        inputId: helpers.idPrefix + "media-display",
+        value: function () { return b.precision === "state" ? "state" : ""; },
+        onSelect: function (button, cardHelpers, value) { setDisplayMode(value); },
+      }),
+    });
+    var displayField = displayMode.segment.parentNode;
+    var labelModeBtn = displayMode.buttons[""];
+    var stateModeBtn = displayMode.buttons.state;
     function syncDisplayField() {
       if (b.sensor === "play_pause" || b.sensor === "position") {
         displayField.style.display = "";
       } else {
         displayField.style.display = "none";
-        if (b.precision) {
+        if (b.precision && !mediaNowPlayingControls(b)) {
           b.precision = "";
           helpers.saveField("precision", "");
         }
@@ -174,47 +274,77 @@ registerButtonType("media", {
       renderButtonSettings();
     }
 
-    displayField.className = "sp-field";
-    displayField.appendChild(helpers.fieldLabel("Display", helpers.idPrefix + "media-display"));
-    var displaySeg = document.createElement("div");
-    displaySeg.className = "sp-segment";
-    labelModeBtn.type = "button";
-    labelModeBtn.textContent = "Label";
-    labelModeBtn.addEventListener("click", function () { setDisplayMode(""); });
-    stateModeBtn.type = "button";
-    stateModeBtn.textContent = "State";
-    stateModeBtn.addEventListener("click", function () { setDisplayMode("state"); });
-    displaySeg.appendChild(labelModeBtn);
-    displaySeg.appendChild(stateModeBtn);
-    displayField.appendChild(displaySeg);
     panel.appendChild(displayField);
     syncDisplayField();
+
+    if (b.sensor === "position") {
+      helpers.renderCardLargeNumbersToggle(panel, b, helpers, MEDIA_CARD_METADATA);
+    }
+
+    if (b.sensor === "now_playing") {
+      var controls = helpers.renderCardSegmentControl(panel, b, helpers, {
+        segment: Object.assign({}, MEDIA_CARD_METADATA.nowPlayingControls, {
+          inputId: helpers.idPrefix + "media-controls",
+          value: function () { return mediaNowPlayingControls(b); },
+          onSelect: function (button, cardHelpers, value) {
+            button.precision = value;
+            cardHelpers.saveField("precision", button.precision);
+            renderButtonSettings();
+          },
+        }),
+      });
+      controls.segment.classList.add("sp-segment-scroll");
+    }
+
+    if (b.sensor === "now_playing") {
+      var controlsMode = mediaNowPlayingControls(b);
+      if (b.precision !== controlsMode) {
+        b.precision = controlsMode;
+        helpers.saveField("precision", b.precision);
+      }
+    }
 
     if (b.sensor !== "now_playing" &&
         (b.sensor !== "play_pause" || b.precision !== "state") &&
         (b.sensor !== "position" || b.precision !== "state")) {
-      var lf = document.createElement("div");
-      lf.className = "sp-field";
-      lf.appendChild(helpers.fieldLabel("Label", helpers.idPrefix + "label"));
-      var labelInp = helpers.textInput(
-        helpers.idPrefix + "label",
-        b.label,
-        b.sensor === "position" ? "Track" : "e.g. Living Room Speaker"
-      );
-      lf.appendChild(labelInp);
-      panel.appendChild(lf);
-      helpers.bindField(labelInp, "label", true);
+      helpers.renderCardTextField(panel, b, helpers, {
+        label: "Label",
+        idSuffix: "label",
+        field: "label",
+        placeholder: b.sensor === "position" ? "Position" : "e.g. Living Room Speaker",
+        rerender: true,
+      });
+    }
+
+    if (b.sensor === "volume") {
+      helpers.renderCardLargeNumbersToggle(panel, b, helpers, MEDIA_CARD_METADATA);
+      var maxField = helpers.renderCardNumberField(panel, b, helpers, {
+        label: "Maximum Volume",
+        idSuffix: "volume-max",
+        min: 1,
+        max: 100,
+        step: 1,
+        placeholder: "100",
+        value: function () {
+          var maxVolume = mediaVolumeMax(b);
+          return maxVolume === "100" ? "" : maxVolume;
+        },
+      });
+      maxField.input.addEventListener("change", function () {
+        setMediaVolumeMax(b, maxField.input.value);
+        maxField.input.value = mediaVolumeMax(b) === "100" ? "" : mediaVolumeMax(b);
+        helpers.saveField("options", b.options);
+      });
     }
 
     if (b.sensor !== "play_pause" && b.sensor !== "now_playing" &&
         b.sensor !== "position" && b.sensor !== "volume") {
-      panel.appendChild(helpers.makeIconPicker(
-        helpers.idPrefix + "icon-picker", helpers.idPrefix + "icon",
-        b.icon || "Speaker", function (opt) {
-          b.icon = opt || "Speaker";
-          helpers.saveField("icon", b.icon);
-        }
-      ));
+      helpers.renderCardIconPicker(panel, b, helpers, {
+        pickerIdSuffix: "icon-picker",
+        idSuffix: "icon",
+        field: "icon",
+        fallback: "Speaker",
+      });
     }
   },
   renderPreview: function (b, helpers) {
@@ -223,55 +353,62 @@ registerButtonType("media", {
       if (value === "previous") return { mode: "previous", label: "Previous", icon: "skip-previous" };
       if (value === "next") return { mode: "next", label: "Next", icon: "skip-next" };
       if (value === "volume") return { mode: "volume", label: "Volume", icon: "volume-high" };
-      if (value === "position") return { mode: "position", label: "Track", icon: "progress-clock" };
+      if (value === "position") return { mode: "position", label: "Position", icon: "progress-clock" };
       if (value === "now_playing") return { mode: "now_playing", label: "Now Playing", icon: "music" };
       return { mode: "play_pause", label: "Play/Pause", icon: "play-pause" };
     }
-    var info = modeInfo(b.sensor);
+    var info = modeInfo(mediaEditorValidMode(b.sensor));
     var mode = info.mode;
     var label = (b.label && b.label.trim()) || info.label;
-    var badge = '<span class="sp-type-badge mdi mdi-speaker"></span>';
     if (mode === "volume") {
       return {
-        iconHtml:
-          '<span class="sp-sensor-preview"><span class="sp-sensor-value">42</span>' +
-          '<span class="sp-sensor-unit">%</span></span>',
-        labelHtml:
-          '<span class="sp-btn-label-row"><span class="sp-btn-label">' + helpers.escHtml(label) + '</span>' +
-          badge + '</span>',
+        iconHtml: cardSensorPreviewHtml(b, helpers, "42", null),
+        labelHtml: cardBadgeLabelHtml(helpers, label, MEDIA_CARD_METADATA.preview.badge),
       };
     }
     if (mode === "position") {
-      var bgColor = (typeof state !== "undefined" && state.offColor) ? state.offColor : "313131";
+      var bgColor = (typeof state !== "undefined" && state.offColor) ? state.offColor : "CECECE";
       var progressColor = "444444";
+      var positionLabel = b.precision === "state" ? "Paused" : label;
+      var positionClass = "sp-sensor-preview sp-media-position-time" +
+        (cardLargeNumbersEnabled(b) ? " sp-sensor-preview-large" : "");
       return {
         iconHtml:
           '<span class="sp-slider-preview" style="inset:-2px;background:#' + helpers.escHtml(bgColor) + '">' +
           '<span class="sp-slider-track"><span class="sp-slider-fill" style="width:50%;height:100%;background:#' +
           helpers.escHtml(progressColor) + '"></span></span></span>' +
-          '<span class="sp-sensor-preview sp-media-position-time">' +
+          '<span class="' + positionClass + '">' +
           '<span class="sp-sensor-value">0:00</span></span>',
-        labelHtml:
-          '<span class="sp-btn-label-row"><span class="sp-btn-label">' + helpers.escHtml(label) + '</span>' +
-          badge + '</span>',
+        labelHtml: cardBadgeLabelHtml(helpers, positionLabel, MEDIA_CARD_METADATA.preview.badge),
       };
     }
     if (mode === "now_playing") {
+      var progressBg = "";
+      if (mediaNowPlayingProgressEnabled(b)) {
+        var nowBgColor = (typeof state !== "undefined" && state.offColor) ? state.offColor : "CECECE";
+        progressBg =
+          '<span class="sp-slider-preview" style="inset:-2px;background:#' + helpers.escHtml(nowBgColor) + '">' +
+          '<span class="sp-slider-track"><span class="sp-slider-fill" style="width:50%;height:100%;background:#444444">' +
+          '</span></span></span>';
+      } else if (mediaNowPlayingPlayPauseEnabled(b)) {
+        var playBgColor = (typeof state !== "undefined" && state.offColor) ? state.offColor : "CECECE";
+        progressBg =
+          '<span class="sp-slider-preview" style="inset:-2px;background:#' + helpers.escHtml(playBgColor) + '">' +
+          '</span>';
+      }
       return {
         iconHtml:
-          '<span class="sp-media-now-title">Midnight City</span>',
+          progressBg + '<span class="sp-media-now-title">Midnight City</span>',
         labelHtml:
           '<span class="sp-btn-label-row"><span class="sp-btn-label sp-media-now-artist">M83</span>' +
-          badge + '</span>',
+          '<span class="sp-type-badge mdi mdi-' + MEDIA_CARD_METADATA.preview.badge + '"></span></span>',
       };
     }
     return {
       iconHtml:
         '<span class="sp-btn-icon mdi mdi-' + (b.icon && b.icon !== "Auto" ? iconSlug(b.icon) : info.icon) + '"></span>',
-      labelHtml:
-        '<span class="sp-btn-label-row"><span class="sp-btn-label">' +
-        helpers.escHtml(mode === "play_pause" && b.precision === "state" ? "Playing" : label) + '</span>' +
-        badge + '</span>',
+      labelHtml: cardBadgeLabelHtml(helpers, mode === "play_pause" && b.precision === "state" ? "Playing" : label,
+        MEDIA_CARD_METADATA.preview.badge),
     };
   },
 });

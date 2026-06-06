@@ -19,21 +19,19 @@ EspControl is free, open-source firmware that turns supported **ESP32 touchscree
 - **Grid layout** — a fixed grid sized to each screen so you can place cards exactly where you want them
 - **Subpage cards** — group related controls into folders to keep the home screen tidy
 - **Flexible card sizes** — make cards Single, Tall, Wide, or Large to suit the control
-- **Current card types** — Switch, Action, Trigger, Sensor, Slider, Cover, Garage Door, Date, World Clock, Weather, and Internal
+- **Current card types** — Switch, Lights, Action, Trigger, Sensor, Doors & Windows, Slider, Cover, Garage Door, Lock, Date & Time, Clock, World Clock, Weather, Media, Climate, and Internal Switches
 - **Edit controls** — drag-and-drop ordering, bulk select, and copy-paste between pages from the built-in web UI
 - **Screensaver** — dims and sleeps after a set time, or wakes automatically from a presence sensor
 
 ## Where to Buy
 
-- **10.1-inch panel (JC8012P4A1):** Guition / AliExpress
-- **7-inch panel (JC1060P470):** [AliExpress](https://s.click.aliexpress.com/e/_c335W0r5) (~£40)
-- **4.3-inch panel (JC4880P443):** [AliExpress](https://s.click.aliexpress.com/e/_c32jr3eN) (~£24)
-- **4-inch Waveshare ESP32-P4 86 Panel:** [Waveshare](https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-4b.htm)
-- **4-inch square panel (4848S040):** [AliExpress](https://s.click.aliexpress.com/e/_c3sIhvBv) (~£16)
-## 3D Printable Stands
-
-- **7-inch desk stand (JC1060P470):** [MakerWorld](https://makerworld.com/en/models/2387421-guition-esp32p4-jc1060p470-7inch-screen-desk-mount#profileId-2614995)
-- **4-inch desk stand (4848S040):** [MakerWorld](https://makerworld.com/en/models/2581572-guition-esp32s3-4848s040-case-stand#profileId-2847301)
+| Screen | Panel | 3D printable mount |
+|---|---|---|
+| 10.1-inch JC8012P4A1 | [AliExpress ~£40](https://s.click.aliexpress.com/e/_c4W6TYvp) | [MakerWorld](https://makerworld.com/en/models/2490049-guition-p4-10inch-screen-stand#profileId-2736046) |
+| 7-inch JC1060P470 | [AliExpress ~£40](https://s.click.aliexpress.com/e/_c335W0r5) | [MakerWorld](https://makerworld.com/en/models/2387421-guition-esp32p4-jc1060p470-7inch-screen-desk-mount#profileId-2614995) |
+| 4.3-inch JC4880P443 | [AliExpress ~£24](https://s.click.aliexpress.com/e/_c32jr3eN) | - |
+| 4-inch ESP32-P4 86 Panel | [AliExpress ~£45](https://s.click.aliexpress.com/e/_c3O6ndAX) | [MakerWorld](https://makerworld.com/en/models/2720366-waveshare-esp32-p4-smart-86-box-screen-desk-stand#profileId-3013481) |
+| 4-inch 4848S040 | [AliExpress ~£16](https://s.click.aliexpress.com/e/_c3sIhvBv) | [MakerWorld](https://makerworld.com/en/models/2581572-guition-esp32s3-4848s040-case-stand#profileId-2847301) |
 
 ## Support This Project
 

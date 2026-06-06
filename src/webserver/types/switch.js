@@ -1,101 +1,167 @@
 // Default button type: HA entity toggle (on/off switch)
+var SWITCH_CARD_METADATA = {
+  entity: {
+    label: "Entity",
+    placeholder: "e.g. light.kitchen",
+    domains: function () { return cardContractDomains(""); },
+    requiredMessage: "Add an entity before saving.",
+  },
+  iconOff: {
+    field: "icon",
+    fallback: "Auto",
+    label: "Off Icon",
+  },
+  iconOn: {
+    field: "icon_on",
+    fallback: "Auto",
+    label: "On Icon",
+  },
+  activeDisplay: {
+    label: "Active Display",
+    idSuffix: "sensor-when-on-toggle",
+    checked: function (b) { return !!b.sensor; },
+  },
+  largeNumbers: {
+    label: "Large Active Display Numbers",
+    idSuffix: "large-active-display-numbers",
+    supported: function (b) {
+      return !!(b && b.sensor && b.precision !== "text");
+    },
+  },
+  sensorMode: {
+    label: "Type",
+    options: [
+      ["numeric", "Numeric"],
+      ["text", "Text"],
+    ],
+  },
+  sensorEntity: {
+    label: "Sensor Entity",
+    idSuffix: "sensor",
+    placeholder: "e.g. sensor.printer_percent_complete",
+    domains: ["sensor", "binary_sensor", "text_sensor"],
+    bindName: "sensor",
+  },
+  unitField: {
+    label: "Unit",
+    idSuffix: "unit",
+    placeholder: "e.g. %",
+    bindName: "unit",
+    rerender: false,
+  },
+  confirmationToggle: {
+    label: "Confirmation Required",
+    idSuffix: "confirm-toggle",
+    checked: function (b) { return switchConfirmationEnabled(b); },
+  },
+  confirmationMode: {
+    label: "When",
+    options: [
+      ["off", "Off"],
+      ["on", "On"],
+      ["both", "Both"],
+    ],
+  },
+  confirmationMessage: {
+    label: "Message",
+    idSuffix: "confirm-message",
+    placeholder: SWITCH_CONFIRM_DEFAULT_MESSAGE,
+    bindName: null,
+    value: function (b) { return switchConfirmationMessage(b); },
+  },
+  confirmationYes: {
+    label: "Confirm Button",
+    idSuffix: "confirm-yes",
+    placeholder: SWITCH_CONFIRM_DEFAULT_YES,
+    bindName: null,
+    value: function (b) { return switchConfirmationYesText(b); },
+  },
+  confirmationNo: {
+    label: "Cancel Button",
+    idSuffix: "confirm-no",
+    placeholder: SWITCH_CONFIRM_DEFAULT_NO,
+    bindName: null,
+    value: function (b) { return switchConfirmationNoText(b); },
+  },
+  preview: {
+    switchBadge: "toggle-switch-variant-off",
+    numericBadge: "gauge",
+    textBadge: "format-text",
+  },
+};
+
+var LIGHT_SWITCH_CARD_METADATA = {
+  mode: LIGHT_CONTROL_TYPE_METADATA.mode,
+  entity: {
+    label: "Entity",
+    placeholder: "e.g. light.living_room",
+    domains: function () { return cardContractDomains("light_switch"); },
+    requiredMessage: "Add a light entity before saving.",
+  },
+  labelField: {
+    label: "Label",
+    placeholder: "e.g. Living Room",
+  },
+  iconOff: {
+    field: "icon",
+    fallback: "Auto",
+    label: "Off Icon",
+  },
+  iconOn: {
+    field: "icon_on",
+    fallback: "Auto",
+    label: "On Icon",
+  },
+  preview: {
+    badge: "lightbulb",
+  },
+};
+
 registerButtonType("", {
-  label: "Switch",
-  allowInSubpage: true,
+  label: function () { return cardContractCardLabel(""); },
+  allowInSubpage: function () { return cardContractAllowInSubpage(""); },
+  pickerKey: function () { return cardContractPickerKey(""); },
+  experimental: function () { return cardContractExperimental(""); },
+  hidden: function () { return cardContractHidden(""); },
+  defaultConfig: function () { return cardContractDefaultConfig(""); },
+  cardMetadata: SWITCH_CARD_METADATA,
   renderSettings: function (panel, b, slot, helpers) {
     var showSensor = !!b.sensor;
     var sensorMode = b.precision === "text" ? "text" : "numeric";
 
-    var ef = document.createElement("div");
-    ef.className = "sp-field";
-    ef.appendChild(helpers.fieldLabel("Entity ID", helpers.idPrefix + "entity"));
-    var entityInp = helpers.textInput(helpers.idPrefix + "entity", b.entity, "e.g. light.kitchen");
-    ef.appendChild(entityInp);
-    panel.appendChild(ef);
-    helpers.bindField(entityInp, "entity", true);
-    helpers.requireField(entityInp, "Add an entity before saving.");
+    helpers.renderCardEntityField(panel, b, helpers, SWITCH_CARD_METADATA);
+    helpers.renderCardIconPicker(panel, b, helpers, SWITCH_CARD_METADATA.iconOff);
+    helpers.renderCardIconPicker(panel, b, helpers, SWITCH_CARD_METADATA.iconOn);
 
-    panel.appendChild(helpers.makeIconPicker(
-      helpers.idPrefix + "icon-picker", helpers.idPrefix + "icon",
-      b.icon || "Auto", function (opt) {
-        b.icon = opt;
-        helpers.saveField("icon", opt);
-      }, "Off Icon"
-    ));
-
-    panel.appendChild(helpers.makeIconPicker(
-      helpers.idPrefix + "icon-on-picker", helpers.idPrefix + "icon-on",
-      b.icon_on || "Auto", function (opt) {
-        b.icon_on = opt;
-        helpers.saveField("icon_on", opt);
-      }, "On Icon"
-    ));
-
-    var sensorToggle = helpers.toggleRow(
-      "Show sensor data when on",
-      helpers.idPrefix + "sensor-when-on-toggle",
-      showSensor
-    );
-    panel.appendChild(sensorToggle.row);
-
+    var sensorToggle = helpers.renderCardOptionToggle(panel, b, helpers, SWITCH_CARD_METADATA.activeDisplay);
     var sensorSection = condField();
     if (showSensor) sensorSection.classList.add("sp-visible");
 
-    var modeField = document.createElement("div");
-    modeField.className = "sp-field";
-    modeField.appendChild(helpers.fieldLabel("Sensor Display"));
-    var modeSeg = document.createElement("div");
-    modeSeg.className = "sp-segment";
-    var numericBtn = document.createElement("button");
-    numericBtn.type = "button";
-    numericBtn.textContent = "Numeric";
-    var textBtn = document.createElement("button");
-    textBtn.type = "button";
-    textBtn.textContent = "Text";
-    modeSeg.appendChild(numericBtn);
-    modeSeg.appendChild(textBtn);
-    modeField.appendChild(modeSeg);
-    sensorSection.appendChild(modeField);
+    var mode = helpers.renderCardSegmentControl(sensorSection, b, helpers, Object.assign({}, SWITCH_CARD_METADATA.sensorMode, {
+      value: function () { return sensorMode; },
+      onSelect: function (b, helpers, value) { setSensorMode(value, true); },
+    }));
+    var numericBtn = mode.buttons.numeric;
+    var textBtn = mode.buttons.text;
 
-    var sf = document.createElement("div");
-    sf.className = "sp-field";
-    sf.appendChild(helpers.fieldLabel("Sensor Entity", helpers.idPrefix + "sensor"));
-    var sensorInp = helpers.textInput(helpers.idPrefix + "sensor", b.sensor, "e.g. sensor.printer_percent_complete");
-    sf.appendChild(sensorInp);
-    sensorSection.appendChild(sf);
-    helpers.bindField(sensorInp, "sensor", true);
+    var sensorField = helpers.renderCardEntityField(sensorSection, b, helpers, {
+      entity: SWITCH_CARD_METADATA.sensorEntity,
+    });
+    var sensorInp = sensorField.input;
 
     var numericSection = condField();
 
-    var uf = document.createElement("div");
-    uf.className = "sp-field";
-    uf.appendChild(helpers.fieldLabel("Unit", helpers.idPrefix + "unit"));
-    var unitInp = helpers.textInput(helpers.idPrefix + "unit", b.unit, "e.g. %");
-    unitInp.className = "sp-input";
-    uf.appendChild(unitInp);
-    numericSection.appendChild(uf);
-    helpers.bindField(unitInp, "unit", false);
+    var unitField = helpers.renderCardTextField(numericSection, b, helpers, SWITCH_CARD_METADATA.unitField);
+    var unitInp = unitField.input;
 
-    var pf = document.createElement("div");
-    pf.className = "sp-field";
-    pf.appendChild(helpers.fieldLabel("Unit Precision", helpers.idPrefix + "precision"));
-    var precisionSelect = document.createElement("select");
-    precisionSelect.className = "sp-select";
-    precisionSelect.id = helpers.idPrefix + "precision";
-    var precOpts = [["0", "10"], ["1", "10.2"], ["2", "10.21"]];
-    for (var pi = 0; pi < precOpts.length; pi++) {
-      var opt = document.createElement("option");
-      opt.value = precOpts[pi][0];
-      opt.textContent = precOpts[pi][1];
-      precisionSelect.appendChild(opt);
-    }
-    precisionSelect.value = sensorMode === "numeric" ? (b.precision || "0") : "0";
-    precisionSelect.addEventListener("change", function () {
+    var precisionField = helpers.precisionField(helpers.idPrefix + "precision",
+      sensorMode === "numeric" ? (b.precision || "0") : "0", function () {
       b.precision = this.value === "0" ? "" : this.value;
       helpers.saveField("precision", b.precision);
     });
-    pf.appendChild(precisionSelect);
-    numericSection.appendChild(pf);
+    var precisionSelect = precisionField.select;
+    numericSection.appendChild(precisionField.field);
+    helpers.renderCardLargeNumbersToggle(numericSection, b, helpers, SWITCH_CARD_METADATA);
     sensorSection.appendChild(numericSection);
 
     panel.appendChild(sensorSection);
@@ -119,8 +185,6 @@ registerButtonType("", {
       }
     }
 
-    numericBtn.addEventListener("click", function () { setSensorMode("numeric", true); });
-    textBtn.addEventListener("click", function () { setSensorMode("text", true); });
     setSensorMode(sensorMode, false);
 
     sensorToggle.input.addEventListener("change", function () {
@@ -141,16 +205,114 @@ registerButtonType("", {
       helpers.saveField("precision", "");
       setSensorMode("numeric", false);
     });
+
+    var confirmOn = switchConfirmationEnabled(b);
+    var confirmMode = switchConfirmationMode(b) || "off";
+    var confirmToggle = helpers.renderCardOptionToggle(panel, b, helpers, SWITCH_CARD_METADATA.confirmationToggle);
+    var confirmSection = condField();
+    if (confirmOn) confirmSection.classList.add("sp-visible");
+
+    helpers.renderCardSegmentControl(confirmSection, b, helpers, Object.assign({}, SWITCH_CARD_METADATA.confirmationMode, {
+      value: function () { return confirmMode; },
+      onSelect: function (b, helpers, value) {
+        var previousDefault = switchConfirmationDefaultMessageForMode(confirmMode);
+        confirmMode = value;
+        if (!messageInput.value || messageInput.value === previousDefault) {
+          messageInput.value = switchConfirmationDefaultMessageForMode(confirmMode);
+        }
+        saveConfirmationOptions();
+      },
+    }));
+
+    var messageField = helpers.renderCardTextField(confirmSection, b, helpers, SWITCH_CARD_METADATA.confirmationMessage);
+    var messageInput = messageField.input;
+    messageInput.maxLength = 72;
+
+    var yesField = helpers.renderCardTextField(confirmSection, b, helpers, SWITCH_CARD_METADATA.confirmationYes);
+    var yesInput = yesField.input;
+    yesInput.maxLength = 20;
+
+    var noField = helpers.renderCardTextField(confirmSection, b, helpers, SWITCH_CARD_METADATA.confirmationNo);
+    var noInput = noField.input;
+    noInput.maxLength = 20;
+
+    panel.appendChild(confirmSection);
+
+    function saveConfirmationOptions() {
+      setSwitchConfirmationOptions(
+        b,
+        confirmToggle.input.checked ? confirmMode : "",
+        messageInput.value || switchConfirmationDefaultMessageForMode(confirmMode),
+        yesInput.value || SWITCH_CONFIRM_DEFAULT_YES,
+        noInput.value || SWITCH_CONFIRM_DEFAULT_NO
+      );
+      helpers.saveField("options", b.options);
+    }
+
+    confirmToggle.input.addEventListener("change", function () {
+      confirmSection.classList.toggle("sp-visible", this.checked);
+      if (this.checked) {
+        if (!messageInput.value) messageInput.value = switchConfirmationDefaultMessageForMode(confirmMode);
+        if (!yesInput.value) yesInput.value = SWITCH_CONFIRM_DEFAULT_YES;
+        if (!noInput.value) noInput.value = SWITCH_CONFIRM_DEFAULT_NO;
+      }
+      saveConfirmationOptions();
+    });
+
+    [messageInput, yesInput, noInput].forEach(function (input) {
+      input.addEventListener("input", saveConfirmationOptions);
+      input.addEventListener("change", saveConfirmationOptions);
+      input.addEventListener("blur", saveConfirmationOptions);
+    });
   },
   renderPreview: function (b, helpers) {
     var label = b.label || b.entity || "Configure";
     var badgeIcon = b.sensor
-      ? (b.precision === "text" ? "format-text" : "gauge")
-      : "toggle-switch-variant-off";
+      ? (b.precision === "text" ? SWITCH_CARD_METADATA.preview.textBadge : SWITCH_CARD_METADATA.preview.numericBadge)
+      : SWITCH_CARD_METADATA.preview.switchBadge;
+    var preview = {
+      labelHtml: cardBadgeLabelHtml(helpers, label, badgeIcon),
+    };
+    if (b.sensor && b.precision !== "text" && cardLargeNumbersEnabled(b)) {
+      preview.iconHtml = cardSensorPreviewHtml(b, helpers, "42", b.unit || "");
+    }
+    return preview;
+  },
+});
+
+registerButtonType("light_switch", {
+  label: function () { return cardContractCardLabel("light_switch"); },
+  allowInSubpage: function () { return cardContractAllowInSubpage("light_switch"); },
+  hideLabel: true,
+  pickerKey: function () { return cardContractPickerKey("light_switch"); },
+  experimental: function () { return cardContractExperimental("light_switch"); },
+  hidden: function () { return cardContractHidden("light_switch"); },
+  defaultConfig: function () { return cardContractDefaultConfig("light_switch"); },
+  isAvailable: function () {
+    return false;
+  },
+  labelPlaceholder: "e.g. Living Room",
+  cardMetadata: LIGHT_SWITCH_CARD_METADATA,
+  onSelect: function (b) {
+    b.sensor = "";
+    b.unit = "";
+    b.precision = "";
+    b.options = "";
+    b.icon = "Lightbulb Outline";
+    b.icon_on = "Lightbulb";
+  },
+  renderSettings: function (panel, b, slot, helpers) {
+    renderLightControlTypeField(panel, b, helpers);
+
+    helpers.renderCardEntityField(panel, b, helpers, LIGHT_SWITCH_CARD_METADATA);
+    helpers.renderCardTextField(panel, b, helpers, LIGHT_SWITCH_CARD_METADATA.labelField);
+    helpers.renderCardIconPicker(panel, b, helpers, LIGHT_SWITCH_CARD_METADATA.iconOff);
+    helpers.renderCardIconPicker(panel, b, helpers, LIGHT_SWITCH_CARD_METADATA.iconOn);
+  },
+  renderPreview: function (b, helpers) {
+    var label = b.label || b.entity || "Configure";
     return {
-      labelHtml:
-        '<span class="sp-btn-label-row"><span class="sp-btn-label">' + helpers.escHtml(label) + '</span>' +
-        '<span class="sp-type-badge mdi mdi-' + badgeIcon + '"></span></span>',
+      labelHtml: cardBadgeLabelHtml(helpers, label, LIGHT_SWITCH_CARD_METADATA.preview.badge),
     };
   },
 });

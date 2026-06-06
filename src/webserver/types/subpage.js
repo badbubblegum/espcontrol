@@ -1,135 +1,199 @@
 // Navigation folder: tap opens a nested grid screen with its own button layout
+var SUBPAGE_CARD_METADATA = {
+  kind: {
+    label: "Type",
+    idSuffix: "subpage-kind",
+    options: [
+      ["", "Generic"],
+      ["lights", "Lights"],
+      ["climate", "Climate"],
+      ["presence", "Presence"],
+      ["media", "Media"],
+    ],
+  },
+  labelField: {
+    label: "Label",
+    placeholder: "e.g. Lighting",
+  },
+  icon: {
+    field: "icon",
+    fallback: "Auto",
+    label: "Icon",
+  },
+  showState: {
+    label: "Show State",
+    idSuffix: "state-toggle",
+    checked: function (b) { return subpageStateDisplayMode(b) !== "off"; },
+  },
+  stateMode: {
+    label: "Type",
+    options: [
+      ["icon", "Icon"],
+      ["numeric", "Numeric"],
+      ["text", "Text"],
+    ],
+  },
+  iconStateEntity: {
+    label: "State Entity",
+    idSuffix: "icon-state-entity",
+    placeholder: "e.g. cover.office_blind",
+    domains: ["light", "switch", "input_boolean", "binary_sensor", "cover", "lock", "media_player", "fan", "person", "device_tracker"],
+    bindName: null,
+    value: function (b) {
+      return subpageStateDisplayMode(b) === "icon" ? (b.entity || "") : "";
+    },
+  },
+  lightsEntity: {
+    label: "Light Entity",
+    idSuffix: "lights-state-entity",
+    placeholder: "e.g. light.living_room",
+    domains: ["light"],
+    bindName: "entity",
+    rerender: true,
+    requiredMessage: "Add a light entity before saving.",
+  },
+  mediaEntity: {
+    label: "Media Entity",
+    idSuffix: "media-state-entity",
+    placeholder: "e.g. media_player.living_room",
+    domains: ["media_player"],
+    bindName: "entity",
+    rerender: true,
+    requiredMessage: "Add a media entity before saving.",
+  },
+  climateEntity: {
+    label: "Climate Entity",
+    idSuffix: "climate-state-entity",
+    placeholder: "e.g. climate.living_room",
+    domains: ["climate"],
+    bindName: "entity",
+    rerender: true,
+    requiredMessage: "Add a climate entity before saving.",
+  },
+  presenceEntity: {
+    label: "Presence Entity",
+    idSuffix: "presence-state-entity",
+    placeholder: "e.g. person.jane",
+    domains: ["person", "device_tracker", "binary_sensor", "input_boolean"],
+    bindName: "entity",
+    rerender: true,
+    requiredMessage: "Add a presence entity before saving.",
+  },
+  sensorEntity: {
+    label: "Sensor Entity",
+    idSuffix: "sensor",
+    placeholder: "e.g. sensor.open_windows",
+    domains: ["sensor", "binary_sensor", "text_sensor"],
+    bindName: null,
+    value: function (b) {
+      return b.sensor && b.sensor !== "indicator" ? b.sensor : "";
+    },
+  },
+  iconOn: {
+    field: "icon_on",
+    fallback: "Auto",
+    label: "On Icon",
+  },
+  unitField: {
+    label: "Unit",
+    idSuffix: "unit",
+    placeholder: "e.g. %",
+    bindName: "unit",
+    rerender: false,
+  },
+  largeNumbers: {
+    label: "Large State Numbers",
+    idSuffix: "large-state-numbers",
+    supported: function (b) {
+      return subpageStateDisplayMode(b) === "numeric";
+    },
+  },
+  preview: {
+    badge: "chevron-right",
+  },
+};
+
 registerButtonType("subpage", {
   label: "Subpage",
   allowInSubpage: false,
   hideLabel: true,
   labelPlaceholder: "e.g. Lighting",
+  cardMetadata: SUBPAGE_CARD_METADATA,
   onSelect: function (b) {
-    b.entity = ""; b.sensor = ""; b.unit = ""; b.icon = "Auto"; b.icon_on = "Auto";
+    b.entity = ""; b.sensor = ""; b.unit = ""; b.icon = "Auto"; b.icon_on = "Auto"; b.options = "";
   },
   renderSettings: function (panel, b, slot, helpers) {
+    var kind = subpageKind(b);
+    helpers.renderCardModeSelector(panel, b, helpers, {
+      mode: Object.assign({}, SUBPAGE_CARD_METADATA.kind, {
+        value: function () { return kind; },
+        onChange: function (button, cardHelpers) {
+          var nextKind = normalizeSubpageKind(this.value);
+          button.options = setConfigOptionValue(button.options, SUBPAGE_KIND_OPTION, nextKind);
+          applySubpagePresetConfig(button, true);
+          button.options = normalizeSubpageOptions(button.options, button.sensor, button.precision);
+          cardHelpers.saveField("options", button.options);
+          cardHelpers.saveField("label", button.label || "");
+          cardHelpers.saveField("icon", button.icon || "Auto");
+          cardHelpers.saveField("icon_on", button.icon_on || "Auto");
+          cardHelpers.saveField("sensor", button.sensor || "");
+          cardHelpers.saveField("unit", button.unit || "");
+          cardHelpers.saveField("precision", button.precision || "");
+          renderButtonSettings();
+        },
+      }),
+    });
+
+    if (kind === "lights" || kind === "media" || kind === "climate" || kind === "presence") {
+      helpers.renderCardTextField(panel, b, helpers, SUBPAGE_CARD_METADATA.labelField);
+      helpers.renderCardIconPicker(panel, b, helpers, SUBPAGE_CARD_METADATA.icon);
+      helpers.renderCardEntityField(panel, b, helpers, {
+        entity: kind === "lights"
+          ? SUBPAGE_CARD_METADATA.lightsEntity
+          : (kind === "media"
+            ? SUBPAGE_CARD_METADATA.mediaEntity
+            : (kind === "climate"
+              ? SUBPAGE_CARD_METADATA.climateEntity
+              : SUBPAGE_CARD_METADATA.presenceEntity)),
+      });
+      appendEditSubpageButton(panel, slot);
+      return;
+    }
+
     var mode = subpageStateDisplayMode(b);
     var showState = mode !== "off";
     var sensorEntity = b.sensor && b.sensor !== "indicator" ? b.sensor : "";
     var iconStateEntity = mode === "icon" ? (b.entity || "") : "";
-    var iconFields = [];
-    var labelInputs = [];
 
-    function syncLabelInputs(source) {
-      for (var i = 0; i < labelInputs.length; i++) {
-        if (labelInputs[i] !== source) labelInputs[i].value = b.label || "";
-      }
-    }
+    helpers.renderCardTextField(panel, b, helpers, SUBPAGE_CARD_METADATA.labelField);
 
-    function saveLabelInput(input) {
-      b.label = input.value;
-      helpers.saveField("label", b.label);
-      syncLabelInputs(input);
-    }
+    var iconSectionMain = helpers.renderCardIconPicker(panel, b, helpers, SUBPAGE_CARD_METADATA.icon);
 
-    function makeSubpageLabelField(suffix) {
-      var field = document.createElement("div");
-      field.className = "sp-field";
-      field.appendChild(helpers.fieldLabel("Label", helpers.idPrefix + suffix));
-      var labelInp = helpers.textInput(helpers.idPrefix + suffix, b.label, "e.g. Lighting");
-      field.appendChild(labelInp);
-      labelInputs.push(labelInp);
-      labelInp.addEventListener("input", function () { saveLabelInput(labelInp); });
-      labelInp.addEventListener("change", function () { saveLabelInput(labelInp); });
-      labelInp.addEventListener("blur", function () { saveLabelInput(labelInp); });
-      labelInp.addEventListener("keydown", function (e) {
-        if (e.key === "Enter") {
-          saveLabelInput(labelInp);
-          this.blur();
-        }
-      });
-      return field;
-    }
-
-    function syncIconFields(value) {
-      for (var i = 0; i < iconFields.length; i++) {
-        var preview = iconFields[i].querySelector(".sp-icon-picker-preview");
-        if (preview) preview.className = "sp-icon-picker-preview mdi mdi-" + iconSlug(value);
-        var input = iconFields[i].querySelector(".sp-icon-picker-input");
-        if (input) input.value = value;
-      }
-    }
-
-    function makeSubpageIconPicker(label, suffix) {
-      var field = helpers.makeIconPicker(
-        helpers.idPrefix + suffix + "-picker", helpers.idPrefix + suffix,
-        b.icon || "Auto", function (opt) {
-          b.icon = opt;
-          helpers.saveField("icon", opt);
-          syncIconFields(opt);
-        }, label
-      );
-      iconFields.push(field);
-      return field;
-    }
-
-    var singleLabelSection = makeSubpageLabelField("label");
-    panel.appendChild(singleLabelSection);
-
-    var singleIconSection = makeSubpageIconPicker("Icon", "icon");
-    panel.appendChild(singleIconSection);
-
-    var showStateToggle = helpers.toggleRow("Show State", helpers.idPrefix + "state-toggle", showState);
-    panel.appendChild(showStateToggle.row);
-
+    var showStateToggle = helpers.renderCardOptionToggle(panel, b, helpers, SUBPAGE_CARD_METADATA.showState);
     var stateCond = condField();
     if (showState) stateCond.classList.add("sp-visible");
 
-    var modeField = document.createElement("div");
-    modeField.className = "sp-field";
-    modeField.appendChild(helpers.fieldLabel("Display"));
-    var modeSeg = document.createElement("div");
-    modeSeg.className = "sp-segment";
-    var iconBtn = document.createElement("button");
-    iconBtn.type = "button";
-    iconBtn.textContent = "Icon";
-    var numericBtn = document.createElement("button");
-    numericBtn.type = "button";
-    numericBtn.textContent = "Numeric";
-    var textBtn = document.createElement("button");
-    textBtn.type = "button";
-    textBtn.textContent = "Text";
-    modeSeg.appendChild(iconBtn);
-    modeSeg.appendChild(numericBtn);
-    modeSeg.appendChild(textBtn);
-    modeField.appendChild(modeSeg);
-    stateCond.appendChild(modeField);
+    var modeControl = helpers.renderCardSegmentControl(stateCond, b, helpers, Object.assign({}, SUBPAGE_CARD_METADATA.stateMode, {
+      value: function () { return mode; },
+      onSelect: function (b, helpers, value) { setMode(value, true); },
+    }));
+    var iconBtn = modeControl.buttons.icon;
+    var numericBtn = modeControl.buttons.numeric;
+    var textBtn = modeControl.buttons.text;
 
-    var iconSection = condField();
-    iconSection.appendChild(makeSubpageLabelField("icon-label"));
-    var iconEntityField = document.createElement("div");
-    iconEntityField.className = "sp-field";
-    iconEntityField.appendChild(helpers.fieldLabel("State Entity", helpers.idPrefix + "icon-state-entity"));
-    var iconEntityInp = helpers.textInput(
-      helpers.idPrefix + "icon-state-entity",
-      iconStateEntity,
-      "e.g. cover.office_blind"
-    );
-    iconEntityField.appendChild(iconEntityInp);
-    iconSection.appendChild(iconEntityField);
-    iconSection.appendChild(makeSubpageIconPicker("Off Icon", "icon-off"));
-    var onIconSection = helpers.makeIconPicker(
-      helpers.idPrefix + "icon-on-picker", helpers.idPrefix + "icon-on",
-      b.icon_on || "Auto", function (opt) {
-        b.icon_on = opt;
-        helpers.saveField("icon_on", opt);
-      }, "On Icon"
-    );
-    iconSection.appendChild(onIconSection);
-    stateCond.appendChild(iconSection);
+    var stateIconSection = condField();
+    var iconEntityField = helpers.renderCardEntityField(stateIconSection, b, helpers, {
+      entity: SUBPAGE_CARD_METADATA.iconStateEntity,
+    });
+    var iconEntityInp = iconEntityField.input;
+    helpers.renderCardIconPicker(stateIconSection, b, helpers, SUBPAGE_CARD_METADATA.iconOn);
+    stateCond.appendChild(stateIconSection);
 
     var sensorField = condField();
-    var sf = document.createElement("div");
-    sf.className = "sp-field";
-    sf.appendChild(helpers.fieldLabel("Sensor Entity", helpers.idPrefix + "sensor"));
-    var sensorInp = helpers.textInput(helpers.idPrefix + "sensor", sensorEntity, "e.g. sensor.open_windows");
-    sf.appendChild(sensorInp);
-    sensorField.appendChild(sf);
+    var sensorEntityField = helpers.renderCardEntityField(sensorField, b, helpers, {
+      entity: SUBPAGE_CARD_METADATA.sensorEntity,
+    });
+    var sensorInp = sensorEntityField.input;
     helpers.requireField(sensorInp, "Add a sensor entity before saving.", function () {
       return showState && (mode === "numeric" || mode === "text");
     });
@@ -169,43 +233,21 @@ registerButtonType("subpage", {
     });
 
     var numericSection = condField();
-    numericSection.appendChild(makeSubpageLabelField("numeric-label"));
 
-    var uf = document.createElement("div");
-    uf.className = "sp-field";
-    uf.appendChild(helpers.fieldLabel("Unit", helpers.idPrefix + "unit"));
-    var unitInp = helpers.textInput(helpers.idPrefix + "unit", b.unit, "e.g. %");
-    unitInp.className = "sp-input";
-    uf.appendChild(unitInp);
-    numericSection.appendChild(uf);
-    helpers.bindField(unitInp, "unit", false);
+    var unitField = helpers.renderCardTextField(numericSection, b, helpers, SUBPAGE_CARD_METADATA.unitField);
+    var unitInp = unitField.input;
 
-    var pf = document.createElement("div");
-    pf.className = "sp-field";
-    pf.appendChild(helpers.fieldLabel("Unit Precision", helpers.idPrefix + "precision"));
-    var precisionSelect = document.createElement("select");
-    precisionSelect.className = "sp-select";
-    precisionSelect.id = helpers.idPrefix + "precision";
-    var precOpts = [["0", "10"], ["1", "10.2"], ["2", "10.21"]];
-    for (var pi = 0; pi < precOpts.length; pi++) {
-      var opt = document.createElement("option");
-      opt.value = precOpts[pi][0];
-      opt.textContent = precOpts[pi][1];
-      precisionSelect.appendChild(opt);
-    }
-    precisionSelect.value = mode === "numeric" ? (b.precision || "0") : "0";
-    precisionSelect.addEventListener("change", function () {
+    var precisionField = helpers.precisionField(helpers.idPrefix + "precision",
+      mode === "numeric" ? (b.precision || "0") : "0", function () {
       if (mode !== "numeric") return;
       b.precision = this.value === "0" ? "" : this.value;
       helpers.saveField("precision", b.precision);
     });
-    pf.appendChild(precisionSelect);
-    numericSection.appendChild(pf);
+    var precisionSelect = precisionField.select;
+    numericSection.appendChild(precisionField.field);
+    helpers.renderCardLargeNumbersToggle(numericSection, b, helpers, SUBPAGE_CARD_METADATA);
 
-    var textSection = condField();
-    textSection.appendChild(makeSubpageIconPicker("Icon", "text-icon"));
     sensorField.appendChild(numericSection);
-    sensorField.appendChild(textSection);
     stateCond.appendChild(sensorField);
 
     panel.appendChild(stateCond);
@@ -214,16 +256,15 @@ registerButtonType("subpage", {
       mode = nextMode;
       showState = mode !== "off";
       showStateToggle.input.checked = showState;
-      singleLabelSection.style.display = showState ? "none" : "";
-      singleIconSection.style.display = showState ? "none" : "";
+      var iconLabel = iconSectionMain.querySelector(".sp-field-label");
+      if (iconLabel) iconLabel.textContent = mode === "icon" ? "Off Icon" : "Icon";
       stateCond.classList.toggle("sp-visible", showState);
       iconBtn.classList.toggle("active", mode === "icon");
       numericBtn.classList.toggle("active", mode === "numeric");
       textBtn.classList.toggle("active", mode === "text");
-      iconSection.classList.toggle("sp-visible", mode === "icon");
+      stateIconSection.classList.toggle("sp-visible", mode === "icon");
       sensorField.classList.toggle("sp-visible", mode === "numeric" || mode === "text");
       numericSection.classList.toggle("sp-visible", mode === "numeric");
-      textSection.classList.toggle("sp-visible", mode === "text");
       if (mode !== "numeric" && mode !== "text") helpers.clearFieldError(sensorInp);
       if (!persist) return;
 
@@ -278,9 +319,6 @@ registerButtonType("subpage", {
       }
     }
 
-    iconBtn.addEventListener("click", function () { setMode("icon", true); });
-    numericBtn.addEventListener("click", function () { setMode("numeric", true); });
-    textBtn.addEventListener("click", function () { setMode("text", true); });
     showStateToggle.input.addEventListener("change", function () {
       setMode(this.checked ? (mode === "off" ? "icon" : mode) : "off", true);
     });
@@ -289,23 +327,26 @@ registerButtonType("subpage", {
     appendEditSubpageButton(panel, slot);
   },
   renderPreview: function (b, helpers) {
-    var label = b.label || b.entity || "Configure";
+    var defaults = subpagePresetDefaults(subpageKind(b));
+    var label = b.label || (defaults && defaults.label) || b.entity || "Configure";
     var mode = subpageStateDisplayMode(b);
 
+    if (mode === "icon") {
+      var stateIconName = b.icon && b.icon !== "Auto" ? iconSlug(b.icon) :
+        (defaults ? iconSlug(defaults.icon) : "cog");
+      return {
+        iconHtml: '<span class="sp-btn-icon mdi mdi-' + stateIconName + '"></span>',
+        labelHtml: subpageBadgeLabelHtml(helpers, label),
+      };
+    }
+
     if (mode === "numeric") {
-      var unit = b.unit ? helpers.escHtml(b.unit) : "";
+      var unit = b.unit || "";
       var prec = parseInt(b.precision || "0", 10) || 0;
       var sampleVal = (0).toFixed(prec);
       return {
-        iconHtml:
-          '<span class="sp-sensor-preview">' +
-            '<span class="sp-sensor-value">' + sampleVal + '</span>' +
-            '<span class="sp-sensor-unit">' + unit + '</span>' +
-          '</span>',
-        labelHtml:
-          '<span class="sp-btn-label-row"><span class="sp-btn-label">' +
-            helpers.escHtml(b.label || b.sensor || "Subpage") +
-          '</span><span class="sp-subpage-badge mdi mdi-chevron-right"></span></span>',
+        iconHtml: cardSensorPreviewHtml(b, helpers, sampleVal, unit),
+        labelHtml: subpageBadgeLabelHtml(helpers, b.label || b.sensor || "Subpage"),
       };
     }
 
@@ -313,22 +354,26 @@ registerButtonType("subpage", {
       var iconName = b.icon && b.icon !== "Auto" ? iconSlug(b.icon) : "cog";
       return {
         iconHtml: '<span class="sp-btn-icon mdi mdi-' + iconName + '"></span>',
-        labelHtml:
-          '<span class="sp-btn-label-row"><span class="sp-btn-label">State</span>' +
-          '<span class="sp-subpage-badge mdi mdi-chevron-right"></span></span>',
+        labelHtml: subpageBadgeLabelHtml(helpers, "State"),
       };
     }
 
     return {
-      labelHtml:
-        '<span class="sp-btn-label-row"><span class="sp-btn-label">' + helpers.escHtml(label) + '</span>' +
-        '<span class="sp-subpage-badge mdi mdi-chevron-right"></span></span>',
+      labelHtml: subpageBadgeLabelHtml(helpers, label),
     };
   },
   contextMenuItems: function (slot, b, helpers) {
     helpers.addCtxItem("cog", "Edit Subpage", function () { enterSubpage(slot); });
   },
 });
+
+function subpageBadgeLabelHtml(helpers, label) {
+  return '<span class="sp-btn-label-row"><span class="sp-btn-label">' +
+    helpers.escHtml(label) +
+  '</span><span class="sp-subpage-badge mdi mdi-' +
+    SUBPAGE_CARD_METADATA.preview.badge +
+  '"></span></span>';
+}
 
 function appendEditSubpageButton(panel, slot) {
   var configBtn = document.createElement("button");

@@ -9,20 +9,8 @@ description:
 Flash the EspControl firmware to your supported ESP32 display directly from your browser — no special software or technical knowledge required.
 
 ::: tip Prefer ESPHome?
-If you want to compile and install the firmware yourself, use the [manual ESPHome setup guide](/getting-started/manual-esphome-setup).
+If you want to compile and install the firmware yourself, use the [Manual Setup guide](/getting-started/manual-esphome-setup).
 :::
-
-## What You Need
-
-- **A supported ESP32 panel:**
-  - **[JC8012P4A1](/screens/jc8012p4a1)** — 10.1-inch, 1280x800, landscape
-  - **[JC1060P470](/screens/jc1060p470)** — 7-inch, 1024x600, landscape
-  - **[JC4880P443](/screens/jc4880p443)** — 4.3-inch, 480x800, portrait
-  - **[Waveshare ESP32-P4 86 Panel](/screens/p4-86)** — 4-inch, 720x720, square
-  - **[4848S040](/screens/4848s040)** — 4-inch, 480x480, square
-- **USB-C cable** — must be a data cable, not a charge-only cable
-- **A computer** running Chrome or Edge (desktop). Safari and Firefox are not supported for flashing.
-- **Home Assistant** running on your network
 
 ## Flash the Firmware
 
@@ -45,13 +33,13 @@ If the install button doesn't detect your device, try a different USB-C cable. C
 
 After flashing, the display needs to connect to your WiFi network.
 
-1. **The display creates a hotspot** called **espcontrol-xxxxxx** (the exact name appears on screen). Connect to it from your phone or laptop.
+1. **The display creates a hotspot.** It can take up to **90 seconds** to appear. Connect to it from your phone or laptop.
 2. **A setup page opens automatically** (captive portal). If it doesn't, open a browser and go to `192.168.4.1`.
 3. **Choose your WiFi network** from the list and enter your password.
 4. **The display reconnects** and shows a loading screen while it joins your network. Once connected, the screen will show your device's address (something like `192.168.1.xxx`).
 
 ::: tip If the hotspot doesn't appear
-Power-cycle the display by unplugging and re-plugging the USB-C cable. The hotspot only appears when the display can't connect to a saved WiFi network.
+Power-cycle the display by unplugging and re-plugging the USB-C cable. The hotspot only appears when the display can't connect to a saved WiFi network, and it may take up to **90 seconds** after startup or a WiFi outage.
 :::
 
 ## Add to Home Assistant

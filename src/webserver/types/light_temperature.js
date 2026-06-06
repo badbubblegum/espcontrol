@@ -2,14 +2,57 @@
 // Slider bottom = min kelvin (warm), top = max kelvin (cool).
 // Config fields: unit="min-max" (kelvin range),
 // precision="color" (dynamic fill color by current temperature),
-// sensor="kelvin" (show live kelvin value as label when light is on).
+// sensor is unused; legacy "kelvin" values are ignored by firmware.
+
+function lightTempSpec() {
+  var card = cardContractCard("light_temperature");
+  return card && card.behavior && card.behavior.lightTemperature || {};
+}
+
+function lightTempDefaultRange() {
+  return lightTempSpec().defaultRange || "2000-6500";
+}
+
+function lightTempMinLimit() {
+  var value = lightTempSpec().min;
+  return typeof value === "number" ? value : 1000;
+}
+
+function lightTempMaxLimit() {
+  var value = lightTempSpec().max;
+  return typeof value === "number" ? value : 10000;
+}
+
+function lightTempMinMaxLimit() {
+  var value = lightTempSpec().minMax;
+  return typeof value === "number" ? value : 9900;
+}
+
+function lightTempStep() {
+  var value = lightTempSpec().step;
+  return typeof value === "number" ? value : 100;
+}
+
+function lightTempLegacySensorValues() {
+  var values = lightTempSpec().legacySensorValues;
+  return values ? values.slice() : ["kelvin"];
+}
+
+function lightTempSensorNeedsCleanup(value) {
+  return lightTempLegacySensorValues().indexOf(value || "") >= 0;
+}
 
 function lightTempParseRange(unit) {
-  var parts = (unit || "2000-6500").split("-");
+  var defaults = lightTempDefaultRange().split("-");
+  var defaultMin = parseInt(defaults[0], 10);
+  var defaultMax = parseInt(defaults[1], 10);
+  if (!isFinite(defaultMin)) defaultMin = 2000;
+  if (!isFinite(defaultMax) || defaultMax <= defaultMin) defaultMax = 6500;
+  var parts = (unit || lightTempDefaultRange()).split("-");
   var mn = parseInt(parts[0], 10);
   var mx = parseInt(parts[1], 10);
-  if (!isFinite(mn) || mn < 1000) mn = 2000;
-  if (!isFinite(mx) || mx <= mn) mx = 6500;
+  if (!isFinite(mn) || mn < lightTempMinLimit()) mn = defaultMin;
+  if (!isFinite(mx) || mx <= mn) mx = defaultMax;
   return [mn, mx];
 }
 
@@ -17,24 +60,93 @@ function lightTempClampMin(v, absMin) {
   var n = parseInt(v, 10);
   if (!isFinite(n)) n = absMin;
   if (n < absMin) n = absMin;
-  if (n > 9900) n = 9900;
+  if (n > lightTempMinMaxLimit()) n = lightTempMinMaxLimit();
   return n;
 }
 
 function lightTempClampMax(v, mn) {
   var n = parseInt(v, 10);
-  if (!isFinite(n)) n = mn + 100;
-  if (n <= mn) n = mn + 100;
-  if (n > 10000) n = 10000;
+  if (!isFinite(n)) n = mn + lightTempStep();
+  if (n <= mn) n = mn + lightTempStep();
+  if (n > lightTempMaxLimit()) n = lightTempMaxLimit();
   return n;
 }
 
+var LIGHT_CONTROL_TYPE_OPTIONS = [
+  ["light_switch", "Switch"],
+  ["light_brightness", "Brightness"],
+  ["light_temperature", "Colour Temperature"],
+];
+
+var LIGHT_CONTROL_TYPE_METADATA = {
+  mode: {
+    label: "Type",
+    idSuffix: "light-control-type",
+    options: LIGHT_CONTROL_TYPE_OPTIONS,
+    value: function (b) { return normalizeLightControlType(b.type); },
+    onChange: function (b, helpers) {
+      setLightControlType(b, this.value, helpers);
+    },
+  },
+};
+
+var LIGHT_TEMPERATURE_CARD_METADATA = {
+  mode: LIGHT_CONTROL_TYPE_METADATA.mode,
+  entity: {
+    label: "Entity",
+    placeholder: "e.g. light.living_room",
+    domains: function () { return cardContractDomains("light_temperature"); },
+  },
+  labelField: {
+    label: "Label",
+    placeholder: "e.g. Living Room",
+  },
+  icon: {
+    field: "icon",
+    fallback: "Auto",
+  },
+  preview: {
+    badge: "lightbulb",
+  },
+};
+
+function normalizeLightControlType(type) {
+  if (type === "light_switch") return "light_switch";
+  return type === "light_temperature" ? "light_temperature" : "light_brightness";
+}
+
+function setLightControlType(b, type, helpers) {
+  var nextType = normalizeLightControlType(type);
+  if (b.type === nextType) return;
+  b.type = nextType;
+  var td = BUTTON_TYPES[nextType];
+  if (td && td.onSelect) td.onSelect(b);
+  helpers.saveField("type", nextType);
+  helpers.saveField("sensor", b.sensor || "");
+  helpers.saveField("unit", b.unit || "");
+  helpers.saveField("precision", b.precision || "");
+  helpers.saveField("icon", b.icon || "Auto");
+  helpers.saveField("icon_on", b.icon_on || "Auto");
+  renderButtonSettings();
+}
+
+function renderLightControlTypeField(panel, b, helpers) {
+  return helpers.renderCardModeSelector(panel, b, helpers, LIGHT_CONTROL_TYPE_METADATA);
+}
+
 registerButtonType("light_temperature", {
-  label: "Light Temperature Slider",
-  experimental: "light_temperature",
-  allowInSubpage: true,
+  label: function () { return cardContractCardLabel("light_temperature"); },
+  allowInSubpage: function () { return cardContractAllowInSubpage("light_temperature"); },
   hideLabel: true,
+  pickerKey: function () { return cardContractPickerKey("light_temperature"); },
+  experimental: function () { return cardContractExperimental("light_temperature"); },
+  hidden: function () { return cardContractHidden("light_temperature"); },
+  defaultConfig: function () { return cardContractDefaultConfig("light_temperature"); },
+  isAvailable: function () {
+    return false;
+  },
   labelPlaceholder: "e.g. Living Room",
+  cardMetadata: LIGHT_TEMPERATURE_CARD_METADATA,
   onSelect: function (b) {
     b.sensor = "";
     b.unit = "2000-6500";
@@ -43,14 +155,15 @@ registerButtonType("light_temperature", {
     b.icon_on = "Auto";
   },
   renderSettings: function (panel, b, slot, helpers) {
-    // Entity ID
-    var ef = document.createElement("div");
-    ef.className = "sp-field";
-    ef.appendChild(helpers.fieldLabel("Entity ID", helpers.idPrefix + "entity"));
-    var entityInp = helpers.textInput(helpers.idPrefix + "entity", b.entity, "e.g. light.living_room");
-    ef.appendChild(entityInp);
-    panel.appendChild(ef);
-    helpers.bindField(entityInp, "entity", true);
+    renderLightControlTypeField(panel, b, helpers);
+
+    helpers.renderCardEntityField(panel, b, helpers, LIGHT_TEMPERATURE_CARD_METADATA);
+    helpers.renderCardTextField(panel, b, helpers, LIGHT_TEMPERATURE_CARD_METADATA.labelField);
+
+    if (lightTempSensorNeedsCleanup(b.sensor)) {
+      b.sensor = "";
+      helpers.saveField("sensor", "");
+    }
 
     // Kelvin range
     var range = lightTempParseRange(b.unit);
@@ -92,7 +205,7 @@ registerButtonType("light_temperature", {
     panel.appendChild(maxF);
 
     function onRangeChange() {
-      var mn = lightTempClampMin(minInp.value, 1000);
+      var mn = lightTempClampMin(minInp.value, lightTempMinLimit());
       var mx = lightTempClampMax(maxInp.value, mn);
       minInp.value = mn;
       maxInp.value = mx;
@@ -103,55 +216,7 @@ registerButtonType("light_temperature", {
     minInp.addEventListener("blur", onRangeChange);
     maxInp.addEventListener("blur", onRangeChange);
 
-    // Icon
-    panel.appendChild(helpers.makeIconPicker(
-      helpers.idPrefix + "icon-picker", helpers.idPrefix + "icon",
-      b.icon || "Auto", function (opt) {
-        b.icon = opt;
-        helpers.saveField("icon", opt);
-      }
-    ));
-
-    // Label mode
-    var labelMode = b.sensor === "kelvin" ? "setting" : "label";
-    var labelModeField = document.createElement("div");
-    labelModeField.className = "sp-field";
-    labelModeField.appendChild(helpers.fieldLabel("Label"));
-    var labelModeSeg = document.createElement("div");
-    labelModeSeg.className = "sp-segment";
-    var labelBtn = document.createElement("button");
-    labelBtn.type = "button";
-    labelBtn.textContent = "Label";
-    var settingBtn = document.createElement("button");
-    settingBtn.type = "button";
-    settingBtn.textContent = "Setting";
-    labelModeSeg.appendChild(labelBtn);
-    labelModeSeg.appendChild(settingBtn);
-    labelModeField.appendChild(labelModeSeg);
-    panel.appendChild(labelModeField);
-
-    var labelSection = condField();
-    var lf = document.createElement("div");
-    lf.className = "sp-field";
-    lf.appendChild(helpers.fieldLabel("Label", helpers.idPrefix + "label"));
-    var labelInp = helpers.textInput(helpers.idPrefix + "label", b.label, "e.g. Living Room");
-    lf.appendChild(labelInp);
-    labelSection.appendChild(lf);
-    panel.appendChild(labelSection);
-    helpers.bindField(labelInp, "label", true);
-
-    function setLabelMode(mode, persist) {
-      labelMode = mode === "setting" ? "setting" : "label";
-      labelBtn.classList.toggle("active", labelMode === "label");
-      settingBtn.classList.toggle("active", labelMode === "setting");
-      labelSection.classList.toggle("sp-visible", labelMode === "label");
-      if (!persist) return;
-      b.sensor = labelMode === "setting" ? "kelvin" : "";
-      helpers.saveField("sensor", b.sensor);
-    }
-    labelBtn.addEventListener("click", function () { setLabelMode("label", true); });
-    settingBtn.addEventListener("click", function () { setLabelMode("setting", true); });
-    setLabelMode(labelMode, false);
+    helpers.renderCardIconPicker(panel, b, helpers, LIGHT_TEMPERATURE_CARD_METADATA.icon);
   },
   renderPreview: function (b, helpers) {
     var label = b.label || b.entity || "Light Temp";
@@ -162,9 +227,7 @@ registerButtonType("light_temperature", {
         '<span class="sp-slider-preview"><span class="sp-slider-track">' +
           '<span class="sp-slider-fill"></span>' +
         '</span></span>',
-      labelHtml:
-        '<span class="sp-btn-label-row"><span class="sp-btn-label">' + helpers.escHtml(label) + '</span>' +
-        '<span class="sp-type-badge mdi mdi-lightbulb"></span></span>',
+      labelHtml: cardBadgeLabelHtml(helpers, label, LIGHT_TEMPERATURE_CARD_METADATA.preview.badge),
     };
   },
 });

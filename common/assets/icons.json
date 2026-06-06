@@ -16,6 +16,84 @@
       "codepoint": "F0142",
       "mdi": "chevron-right",
       "comment": "Subpage indicator"
+    },
+    {
+      "name": "Close",
+      "codepoint": "F0156",
+      "mdi": "close",
+      "comment": "Modal close button"
+    },
+    {
+      "name": "Download",
+      "codepoint": "F01DA",
+      "mdi": "download",
+      "comment": "Firmware install update entity"
+    },
+    {
+      "name": "Tag",
+      "codepoint": "F04F9",
+      "mdi": "tag",
+      "comment": "Firmware version entity"
+    },
+    {
+      "name": "Update",
+      "codepoint": "F06B0",
+      "mdi": "update",
+      "comment": "Firmware update entities"
+    },
+    {
+      "name": "Wi-Fi Startup",
+      "codepoint": "F05A9",
+      "mdi": "wifi",
+      "comment": "Setup screens"
+    },
+    {
+      "name": "Wi-Fi",
+      "codepoint": "F0928",
+      "mdi": "wifi-strength-4",
+      "comment": "Setup screens"
+    },
+    {
+      "name": "Wi-Fi Strength Outline",
+      "codepoint": "F092F",
+      "mdi": "wifi-strength-outline",
+      "comment": "Network status"
+    },
+    {
+      "name": "Wi-Fi Strength 1",
+      "codepoint": "F091F",
+      "mdi": "wifi-strength-1",
+      "comment": "Network status"
+    },
+    {
+      "name": "Wi-Fi Strength 2",
+      "codepoint": "F0922",
+      "mdi": "wifi-strength-2",
+      "comment": "Network status"
+    },
+    {
+      "name": "Wi-Fi Strength 3",
+      "codepoint": "F0925",
+      "mdi": "wifi-strength-3",
+      "comment": "Network status"
+    },
+    {
+      "name": "Wi-Fi Strength Off Outline",
+      "codepoint": "F092E",
+      "mdi": "wifi-strength-off-outline",
+      "comment": "Network status"
+    },
+    {
+      "name": "Ethernet",
+      "codepoint": "F0200",
+      "mdi": "ethernet",
+      "comment": "Setup screens"
+    },
+    {
+      "name": "Home Assistant",
+      "codepoint": "F07D0",
+      "mdi": "home-assistant",
+      "comment": "Setup screens"
     }
   ],
   "icons": [
@@ -40,6 +118,16 @@
       "mdi": "air-purifier"
     },
     {
+      "name": "Air Purifier Off",
+      "codepoint": "F1B57",
+      "mdi": "air-purifier-off"
+    },
+    {
+      "name": "Airplane",
+      "codepoint": "F001D",
+      "mdi": "airplane"
+    },
+    {
       "name": "Alarm",
       "codepoint": "F009E",
       "mdi": "bell-ring"
@@ -53,6 +141,16 @@
       "name": "Application",
       "codepoint": "F0614",
       "mdi": "application-outline"
+    },
+    {
+      "name": "Arrow Down",
+      "codepoint": "F0045",
+      "mdi": "arrow-down"
+    },
+    {
+      "name": "Arrow Up",
+      "codepoint": "F005D",
+      "mdi": "arrow-up"
     },
     {
       "name": "Battery",
@@ -155,9 +253,24 @@
       "mdi": "battery-unknown"
     },
     {
+      "name": "Bathtub",
+      "codepoint": "F1818",
+      "mdi": "bathtub"
+    },
+    {
       "name": "Bed",
       "codepoint": "F02E3",
       "mdi": "bed"
+    },
+    {
+      "name": "Bed King",
+      "codepoint": "F0FD2",
+      "mdi": "bed-king"
+    },
+    {
+      "name": "Bed Queen",
+      "codepoint": "F0FD0",
+      "mdi": "bed-queen"
     },
     {
       "name": "Bell",
@@ -210,6 +323,11 @@
       "mdi": "cast"
     },
     {
+      "name": "Cat",
+      "codepoint": "F011B",
+      "mdi": "cat"
+    },
+    {
       "name": "CCTV",
       "codepoint": "F07AE",
       "mdi": "cctv"
@@ -233,6 +351,26 @@
       "name": "Chandelier",
       "codepoint": "F1793",
       "mdi": "chandelier"
+    },
+    {
+      "name": "Check",
+      "codepoint": "F012C",
+      "mdi": "check"
+    },
+    {
+      "name": "Chair Rolling",
+      "codepoint": "F0F48",
+      "mdi": "chair-rolling"
+    },
+    {
+      "name": "Chevron Down",
+      "codepoint": "F0140",
+      "mdi": "chevron-down"
+    },
+    {
+      "name": "Chevron Up",
+      "codepoint": "F0143",
+      "mdi": "chevron-up"
     },
     {
       "name": "Clock",
@@ -265,6 +403,26 @@
       "mdi": "curtains-closed"
     },
     {
+      "name": "Delete",
+      "codepoint": "F01B4",
+      "mdi": "delete"
+    },
+    {
+      "name": "Delete Empty",
+      "codepoint": "F06CC",
+      "mdi": "delete-empty"
+    },
+    {
+      "name": "Delete Outline",
+      "codepoint": "F09E7",
+      "mdi": "delete-outline"
+    },
+    {
+      "name": "Desk",
+      "codepoint": "F1239",
+      "mdi": "desk"
+    },
+    {
       "name": "Desk Lamp",
       "codepoint": "F095F",
       "mdi": "desk-lamp"
@@ -273,6 +431,11 @@
       "name": "Dishwasher",
       "codepoint": "F0AAC",
       "mdi": "dishwasher"
+    },
+    {
+      "name": "Dishwasher Off",
+      "codepoint": "F11B9",
+      "mdi": "dishwasher-off"
     },
     {
       "name": "Dog",
@@ -310,6 +473,11 @@
       "mdi": "tumble-dryer"
     },
     {
+      "name": "Dryer Off",
+      "codepoint": "F11BB",
+      "mdi": "tumble-dryer-off"
+    },
+    {
       "name": "EV Charger",
       "codepoint": "F05F1",
       "mdi": "ev-station"
@@ -320,9 +488,39 @@
       "mdi": "fan"
     },
     {
+      "name": "Fan Off",
+      "codepoint": "F081D",
+      "mdi": "fan-off"
+    },
+    {
+      "name": "Fan Auto",
+      "codepoint": "F171D",
+      "mdi": "fan-auto"
+    },
+    {
+      "name": "Fan Speed 1",
+      "codepoint": "F1472",
+      "mdi": "fan-speed-1"
+    },
+    {
+      "name": "Fan Speed 2",
+      "codepoint": "F1473",
+      "mdi": "fan-speed-2"
+    },
+    {
+      "name": "Fan Speed 3",
+      "codepoint": "F1474",
+      "mdi": "fan-speed-3"
+    },
+    {
       "name": "Fire",
       "codepoint": "F0238",
       "mdi": "fire"
+    },
+    {
+      "name": "Fire Off",
+      "codepoint": "F1722",
+      "mdi": "fire-off"
     },
     {
       "name": "Fireplace",
@@ -450,6 +648,16 @@
       "mdi": "heat-pump"
     },
     {
+      "name": "Heat Wave",
+      "codepoint": "F1A45",
+      "mdi": "heat-wave"
+    },
+    {
+      "name": "Heating Coil",
+      "codepoint": "F1AAF",
+      "mdi": "heating-coil"
+    },
+    {
       "name": "HVAC",
       "codepoint": "F1352",
       "mdi": "hvac"
@@ -533,6 +741,11 @@
       "name": "Light Switch",
       "codepoint": "F097E",
       "mdi": "light-switch"
+    },
+    {
+      "name": "Flood Light Down",
+      "codepoint": "F1987",
+      "mdi": "light-flood-down"
     },
     {
       "name": "Lightbulb",
@@ -675,6 +888,11 @@
       "mdi": "motion-sensor"
     },
     {
+      "name": "Motion Sensor Off",
+      "codepoint": "F1435",
+      "mdi": "motion-sensor-off"
+    },
+    {
       "name": "Movie Roll",
       "codepoint": "F07DE",
       "mdi": "movie-roll"
@@ -765,6 +983,11 @@
       "mdi": "projector-off"
     },
     {
+      "name": "Recycle",
+      "codepoint": "F044C",
+      "mdi": "recycle"
+    },
+    {
       "name": "Robot Vacuum",
       "codepoint": "F070D",
       "mdi": "robot-vacuum"
@@ -795,7 +1018,27 @@
       "mdi": "shield-home"
     },
     {
+      "name": "Shield Home",
+      "codepoint": "F068A",
+      "mdi": "shield-home"
+    },
+    {
+      "name": "Shield Lock",
+      "codepoint": "F099D",
+      "mdi": "shield-lock"
+    },
+    {
+      "name": "Shield Off",
+      "codepoint": "F099E",
+      "mdi": "shield-off"
+    },
+    {
       "name": "Shower",
+      "codepoint": "F09A0",
+      "mdi": "shower"
+    },
+    {
+      "name": "Shower Head",
       "codepoint": "F09A1",
       "mdi": "shower-head"
     },
@@ -830,9 +1073,19 @@
       "mdi": "snowflake-thermometer"
     },
     {
+      "name": "Silverware",
+      "codepoint": "F04A3",
+      "mdi": "silverware"
+    },
+    {
       "name": "Sofa",
       "codepoint": "F04B9",
       "mdi": "sofa"
+    },
+    {
+      "name": "Sofa Outline",
+      "codepoint": "F156D",
+      "mdi": "sofa-outline"
     },
     {
       "name": "Solar Panel",
@@ -885,6 +1138,16 @@
       "mdi": "string-lights-off"
     },
     {
+      "name": "Stove",
+      "codepoint": "F04DE",
+      "mdi": "stove"
+    },
+    {
+      "name": "Swap Horizontal",
+      "codepoint": "F04E1",
+      "mdi": "swap-horizontal"
+    },
+    {
       "name": "Power Socket UK",
       "codepoint": "F07E8",
       "mdi": "power-socket-uk"
@@ -908,6 +1171,11 @@
       "name": "Table",
       "codepoint": "F05BC",
       "mdi": "table-furniture"
+    },
+    {
+      "name": "Table Chair",
+      "codepoint": "F1061",
+      "mdi": "table-chair"
     },
     {
       "name": "Television",
@@ -940,9 +1208,19 @@
       "mdi": "thermometer-low"
     },
     {
+      "name": "Thermometer Off",
+      "codepoint": "F1531",
+      "mdi": "thermometer-off"
+    },
+    {
       "name": "Thermostat",
       "codepoint": "F0393",
       "mdi": "thermostat"
+    },
+    {
+      "name": "Thermostat Box",
+      "codepoint": "F0891",
+      "mdi": "thermostat-box"
     },
     {
       "name": "Home-Thermostat",
@@ -980,6 +1258,11 @@
       "mdi": "trash-can"
     },
     {
+      "name": "Trash Can Outline",
+      "codepoint": "F0A7A",
+      "mdi": "trash-can-outline"
+    },
+    {
       "name": "Volume High",
       "codepoint": "F057E",
       "mdi": "volume-high"
@@ -995,9 +1278,14 @@
       "mdi": "wall-sconce"
     },
     {
-      "name": "Washer",
+      "name": "Washing Machine",
       "codepoint": "F072A",
       "mdi": "washing-machine"
+    },
+    {
+      "name": "Washing Machine Off",
+      "codepoint": "F11BD",
+      "mdi": "washing-machine-off"
     },
     {
       "name": "Water",
@@ -1005,9 +1293,14 @@
       "mdi": "water"
     },
     {
-      "name": "Water Heater",
+      "name": "Water Boiler",
       "codepoint": "F0F92",
       "mdi": "water-boiler"
+    },
+    {
+      "name": "Water Boiler Off",
+      "codepoint": "F11B4",
+      "mdi": "water-boiler-off"
     },
     {
       "name": "Water Percent",

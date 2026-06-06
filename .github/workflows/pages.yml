@@ -24,6 +24,7 @@ concurrency:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  ESPCONTROL_NPM_CACHE_MAX_MB: 512
 
 jobs:
   build-docs:
@@ -33,22 +34,22 @@ jobs:
       github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
+      - name: Prepare self-hosted workspace
+        run: rm -rf "${GITHUB_WORKSPACE}/.esphome" || sudo rm -rf "${GITHUB_WORKSPACE}/.esphome"
+
       - uses: actions/checkout@v6
+      - run: git sparse-checkout disable || true
 
       - uses: actions/setup-node@v6
         with:
           node-version: 24
 
-      - name: Cache node_modules
-        id: node-modules-cache
-        uses: actions/cache@v5
-        with:
-          path: node_modules
-          key: node-modules-${{ hashFiles('package-lock.json') }}
-
       - name: Install dependencies
-        if: steps.node-modules-cache.outputs.cache-hit != 'true'
-        run: npm ci
+        run: |
+          NPM_CACHE="${HOME}/.cache/espcontrol-actions/npm"
+          mkdir -p "${NPM_CACHE}"
+          npm ci --prefer-offline --cache "${NPM_CACHE}"
+          bash scripts/prune_actions_cache.sh "${NPM_CACHE}" "${ESPCONTROL_NPM_CACHE_MAX_MB}" --strategy reset
 
       - name: Build docs
         run: npm run docs:build
@@ -66,31 +67,50 @@ jobs:
       github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
+      - name: Prepare self-hosted workspace
+        run: rm -rf "${GITHUB_WORKSPACE}/.esphome" || sudo rm -rf "${GITHUB_WORKSPACE}/.esphome"
+
       - uses: actions/checkout@v6
         with:
-          sparse-checkout: src/webserver/devices.json
+          sparse-checkout: devices/manifest.json
           sparse-checkout-cone-mode: false
 
       - name: Set device slugs
-        run: echo "DEVICE_SLUGS=$(jq -r 'keys | join(" ")' src/webserver/devices.json)" >> $GITHUB_ENV
+        run: |
+          DEVICE_SLUGS=$(jq -r '.devices | keys | join(" ")' devices/manifest.json)
+          echo "DEVICE_SLUGS=${DEVICE_SLUGS}" >> "$GITHUB_ENV"
 
       - name: Download firmware from latest release
         env:
           GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
         run: |
+          API_URL="https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/latest"
+          RELEASE_JSON=$(curl -fsSL \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "${API_URL}")
+
+          download_asset() {
+            ASSET_NAME="$1"
+            OUTPUT_PATH="$2"
+            ASSET_URL=$(printf '%s' "${RELEASE_JSON}" | jq -r --arg name "${ASSET_NAME}" \
+              '.assets[] | select(.name == $name) | .url' | head -n 1)
+            if [ -z "${ASSET_URL}" ]; then
+              return 0
+            fi
+            curl -fsSL \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/octet-stream" \
+              "${ASSET_URL}" \
+              -o "${OUTPUT_PATH}"
+          }
+
           for SLUG in $DEVICE_SLUGS; do
             (
               mkdir -p "firmware/${SLUG}"
-              gh release download \
-                --pattern "${SLUG}.manifest.json" \
-                --pattern "${SLUG}.factory.bin" \
-                --pattern "${SLUG}.ota.bin" \
-                --dir "firmware/${SLUG}/" || true
-              if [ -f "firmware/${SLUG}/${SLUG}.manifest.json" ]; then
-                mv "firmware/${SLUG}/${SLUG}.manifest.json" \
-                   "firmware/${SLUG}/manifest.json"
-              fi
+              download_asset "${SLUG}.manifest.json" "firmware/${SLUG}/manifest.json"
+              download_asset "${SLUG}.factory.bin" "firmware/${SLUG}/${SLUG}.factory.bin"
+              download_asset "${SLUG}.ota.bin" "firmware/${SLUG}/${SLUG}.ota.bin"
             ) &
           done
           wait
@@ -98,22 +118,34 @@ jobs:
       - name: Download firmware from latest pre-release
         env:
           GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
         run: |
-          BETA_TAG=$(gh release list --limit 20 --json tagName,isPrerelease \
-            -q '[.[] | select(.isPrerelease)] | .[0].tagName // empty')
-          if [ -n "$BETA_TAG" ]; then
+          RELEASES_JSON=$(curl -fsSL \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases?per_page=20")
+          BETA_ASSETS=$(printf '%s' "${RELEASES_JSON}" | jq -c '[.[] | select(.prerelease)][0].assets // []')
+
+          if [ "${BETA_ASSETS}" != "[]" ]; then
+            download_beta_asset() {
+              ASSET_NAME="$1"
+              OUTPUT_PATH="$2"
+              ASSET_URL=$(printf '%s' "${BETA_ASSETS}" | jq -r --arg name "${ASSET_NAME}" \
+                '.[] | select(.name == $name) | .url' | head -n 1)
+              if [ -z "${ASSET_URL}" ]; then
+                return 0
+              fi
+              curl -fsSL \
+                -H "Authorization: Bearer ${GH_TOKEN}" \
+                -H "Accept: application/octet-stream" \
+                "${ASSET_URL}" \
+                -o "${OUTPUT_PATH}"
+            }
+
             for SLUG in $DEVICE_SLUGS; do
               (
                 mkdir -p "firmware/${SLUG}/beta"
-                gh release download "$BETA_TAG" \
-                  --pattern "${SLUG}.manifest.json" \
-                  --pattern "${SLUG}.ota.bin" \
-                  --dir "firmware/${SLUG}/beta/" || true
-                if [ -f "firmware/${SLUG}/beta/${SLUG}.manifest.json" ]; then
-                  mv "firmware/${SLUG}/beta/${SLUG}.manifest.json" \
-                     "firmware/${SLUG}/beta/manifest.json"
-                fi
+                download_beta_asset "${SLUG}.manifest.json" "firmware/${SLUG}/beta/manifest.json"
+                download_beta_asset "${SLUG}.ota.bin" "firmware/${SLUG}/beta/${SLUG}.ota.bin"
               ) &
             done
             wait
@@ -150,6 +182,13 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: |
+            devices/manifest.json
+            scripts/check_public_firmware.py
+          sparse-checkout-cone-mode: false
+
       - name: Download docs artifact
         uses: actions/download-artifact@v8
         with:
@@ -158,6 +197,7 @@ jobs:
 
       - name: Download firmware artifact
         uses: actions/download-artifact@v8
+        continue-on-error: true
         with:
           name: firmware
           path: dist/firmware
@@ -170,3 +210,12 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
+
+      - name: Verify public firmware assets
+        run: >-
+          python3 scripts/check_public_firmware.py
+          --base-url "${{ steps.deployment.outputs.page_url }}"
+          --manifest devices/manifest.json
+          --optional-stable-slugs guition-esp32-p4-jc8012p4a1 esp32-p4-86
+          --retries 5
+          --delay 20
