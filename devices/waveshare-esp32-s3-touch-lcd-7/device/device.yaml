@@ -4,6 +4,10 @@
 # Hardware configuration for EspControl
 # =============================================================
 
+substitutions:
+  espcontrol_component_url: "https://github.com/badbubblegum/espcontrol"
+  espcontrol_component_ref: "main"
+
 esphome:
   platformio_options:
     build_flags: "-DBOARD_HAS_PSRAM"
