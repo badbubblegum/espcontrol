@@ -11,6 +11,15 @@ esphome:
     board_build.flash_mode: dio
     board_upload.maximum_ram_size: 524288
 
+external_components:
+  - source:
+      type: git
+      url: ${espcontrol_component_url}
+      ref: ${espcontrol_component_ref}
+      path: components
+    components: [espcontrol, artwork_image]
+    refresh: 0s
+
 psram:
   mode: octal
   speed: 120MHz
