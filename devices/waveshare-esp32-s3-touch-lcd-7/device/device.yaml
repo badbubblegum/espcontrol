@@ -1,11 +1,19 @@
-# =============================================================================
-# DEVICE - Waveshare ESP32-S3-N8R8 7" Capacitive Touch Display 800×480
+# =============================================================
+# Waveshare 7" ESP32-S3-N8R8 Capacitive Touch Display 800×480
 # https://www.waveshare.com/esp32-s3-touch-lcd-7.htm
-# =============================================================================
+# Hardware configuration for EspControl
+# =============================================================
 
-substitutions:
-  espcontrol_component_url: "https://github.com/badbubblegum/espcontrol"
-  espcontrol_component_ref: "main"
+esphome:
+  platformio_options:
+    build_flags: "-DBOARD_HAS_PSRAM"
+    board_build.arduino.memory_type: qio_opi
+    board_build.flash_mode: dio
+    board_upload.maximum_ram_size: 524288
+
+psram:
+  mode: octal
+  speed: 120MHz
 
 esp32:
   board: esp32-s3-devkitc-1
@@ -31,71 +39,6 @@ esp32:
       CONFIG_SPIRAM_RODATA: y
       CONFIG_ESP32S3_DATA_CACHE_LINE_64B: y
       CONFIG_COMPILER_OPTIMIZATION_PERF: y
-      CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC: "y"
-      CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM: "8"
-      CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP: "y"
-      CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY: "y"
-      CONFIG_SPIRAM_ALLOW_NOINIT_SEG_EXTERNAL_MEMORY: "y"
-      CONFIG_ESP_TASK_WDT_TIMEOUT_S: "30"
-
-esphome:
-  name: ${name}
-  friendly_name: ${friendly_name}
-  platformio_options:
-    build_flags: "-DBOARD_HAS_PSRAM"
-    board_build.arduino.memory_type: qio_opi
-    board_build.flash_mode: dio
-    board_upload.maximum_ram_size: 524288
-  on_boot:
-#    - priority: 800
-#      then:
-#        - lambda: |-
-#            auto reason = esp_reset_reason();
-#            if (reason == ESP_RST_USB || reason == ESP_RST_SW) {
-#              esp_sleep_enable_timer_wakeup(100000);
-#              esp_deep_sleep_start();
-#            }
-    - priority: -100
-      then:
-        - script.execute: apply_screen_rotation
-
-external_components:
-  - source:
-      type: git
-      url: ${espcontrol_component_url}
-      ref: ${espcontrol_component_ref}
-      path: components
-    components: [espcontrol, artwork_image]
-    refresh: 0s
-
-espcontrol:
-
-psram:
-  mode: octal
-  speed: 120MHz
-
-ota:
-  - platform: esphome
-    on_begin:
-      then:
-        - light.turn_off: display_backlight
-    on_end:
-      then:
-        - lambda: |-
-            esp_sleep_enable_timer_wakeup(100000);
-            esp_deep_sleep_start();
-  - platform: http_request
-
-packages:
-  core_infra: !include ../../../common/device/core_infra.yaml
-
-logger:
-
-wifi:
-  use_psram: true
-
-ch422g:
-  - id: ch422g_hub
 
 spi:
   clk_pin: GPIO12
@@ -105,9 +48,18 @@ spi:
 i2c:
   sda: GPIO08
   scl: GPIO09
-  scan: true
+  scan: True
   id: bus_a
 
+# -------------------------------------------
+# IO Extender
+# -------------------------------------------
+ch422g:
+  - id: ch422g_hub
+
+# -------------------------------------------
+# Backlight (binary via CH422G)
+# -------------------------------------------
 output:
   - platform: gpio
     id: lcdbacklight_output
@@ -118,59 +70,37 @@ output:
         output: true
       inverted: false
 
-  - platform: template
-    id: gpio_backlight_pwm
-    type: float
-    write_action:
-      - if:
-          condition:
-            lambda: 'return state > 0.01f;'
-          then:
-            - output.turn_on: lcdbacklight_output
-          else:
-            - output.turn_off: lcdbacklight_output
-
 light:
   - platform: binary
     output: lcdbacklight_output
-    name: Display Backlight
-    icon: mdi:lightbulb-on
-    id: display_backlight
-    restore_mode: RESTORE_DEFAULT_ON
-    on_turn_on:
-      then:
-        - if:
-            condition:
-              lambda: |-
-                return id(screen_schedule_asleep) ||
-                       (id(schedule_enabled).state && !panel_time_or_fallback(id(panel_time).now(), id(homeassistant_time).now()).is_valid());
-            then:
-              - script.execute: backlight_force_display_off
-            else:
-              - if:
-                  condition:
-                    lambda: 'return id(screensaver_display_off_active);'
-                  then:
-                    - script.execute: screensaver_wake
+    id: lcdbacklight
+    name: LCD Backlight
+    icon: mdi:wall-sconce-flat-outline
+    disabled_by_default: true
+    restore_mode: ALWAYS_ON
+    internal: false
 
+# -------------------------------------------
+# Touchscreen GT911
+# -------------------------------------------
 touchscreen:
-  - platform: gt911
-    id: my_touchscreen
-    display: my_display
-    i2c_id: bus_a
-    update_interval: 16ms
-    interrupt_pin: GPIO4
-    transform:
-      swap_xy: false
-      mirror_x: false
-      mirror_y: false
-    reset_pin:
-      ch422g: ch422g_hub
-      number: 1
-      mode: OUTPUT
-    on_touch:
-      - script.execute: screensaver_wake
+  platform: gt911
+  id: my_touchscreen
+  display: my_display
+  i2c_id: bus_a
+  interrupt_pin: GPIO4
+  transform:
+    swap_xy: false
+    mirror_x: true
+    mirror_y: true
+  reset_pin:
+    ch422g: ch422g_hub
+    number: 1
+    mode: OUTPUT
 
+# -------------------------------------------
+# Display — RPI DPI RGB 800×480
+# -------------------------------------------
 display:
   - platform: rpi_dpi_rgb
     id: my_display
@@ -178,6 +108,7 @@ display:
     auto_clear_enabled: false
     color_order: RGB
     pclk_frequency: 16MHz
+    rotation: 180
     dimensions:
       width: 800
       height: 480
@@ -202,74 +133,21 @@ display:
     vsync_pulse_width: 4
     data_pins:
       red:
-        - 1
-        - 2
-        - 42
-        - 41
-        - 40
+        - 1         #r3
+        - 2         #r4
+        - 42        #r5
+        - 41        #r6
+        - 40        #r7
       blue:
-        - 14
-        - 38
-        - 18
-        - 17
-        - 10
+        - 14        #b3
+        - 38        #b4
+        - 18        #b5
+        - 17        #b6
+        - 10        #b7
       green:
-        - 39
-        - 0
-        - 45
-        - 48
-        - 47
-        - 21
-
-lvgl:
-  id: main_lvgl
-  setup_priority: 230
-  buffer_size: 25%
-  displays: my_display
-  rotation: 180
-  touchscreens:
-    - touchscreen_id: my_touchscreen
-      long_press_time: 3s
-
-script:
-  - id: apply_screen_rotation
-    then:
-      - if:
-          condition:
-            lambda: 'return id(screen_rotation_select).current_option() == "90";'
-          then:
-            - lvgl.display.set_rotation: 270
-          else:
-            - if:
-                condition:
-                  lambda: 'return id(screen_rotation_select).current_option() == "180";'
-                then:
-                  - lvgl.display.set_rotation: 0
-                else:
-                  - if:
-                      condition:
-                        lambda: 'return id(screen_rotation_select).current_option() == "270";'
-                      then:
-                        - lvgl.display.set_rotation: 90
-                      else:
-                        - lvgl.display.set_rotation: 180
-
-select:
-  - platform: template
-    name: "Screen: Rotation"
-    internal: true
-    disabled_by_default: true
-    id: screen_rotation_select
-    entity_category: config
-    icon: "mdi:screen-rotation"
-    optimistic: true
-    restore_value: true
-    initial_option: "0"
-    options:
-      - "0"
-      - "90"
-      - "180"
-      - "270"
-    on_value:
-      then:
-        - script.execute: apply_screen_rotation
+        - 39        #g2
+        - 0         #g3
+        - 45        #g4
+        - 48        #g5
+        - 47        #g6
+        - 21        #g7
