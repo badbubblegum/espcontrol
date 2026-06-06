@@ -1,27 +1,28 @@
 # =============================================================================
 # PACKAGES - ESPHome include manifest
 # Waveshare 7" ESP32-S3-N8R8 Capacitive Touch Display 800×480
-# https://www.waveshare.com/esp32-s3-touch-lcd-7.htm
 # =============================================================================
 
 substitutions:
-  device_slug: "guition-esp32-p4-jc1060p470"
-  firmware_manifest_slug: "guition-esp32-p4-jc1060p470"
+  device_slug: "waveshare-esp32-s3-touch-lcd-7"
+  firmware_manifest_slug: "waveshare-esp32-s3-touch-lcd-7"
   screen_width: "800"
   screen_height: "480"
   content_width: "760"
-  setup_icon_font_id: icon_font_setup
-  setup_title_font_id: setup_title_font
-  setup_body_font_id: setup_body_font
+  setup_icon_font_id: font_icon_main
+  setup_title_font_id: font_text_title
+  setup_body_font_id: font_text_body
   setup_pad_row: "20"
   setup_loading_pad_row: "40"
   setup_action_button_width: "200"
   setup_action_button_height: "56"
   setup_action_button_radius: "12"
-  icon_font: icon_font_md
-  label_font: label_font_md
-  unit_font: label_font_md
-  sensor_value_font: statistics_font
+  icon_font: font_icon_main
+  subpage_chevron_font: font_icon_status
+  label_font: font_text_body
+  media_title_font: font_text_title
+  unit_font: font_text_body
+  sensor_value_font: font_number_value
   padding: 14px
   radius: 8px
   main_page_pad_top: "38"
@@ -29,13 +30,24 @@ substitutions:
   clock_font_size: "160"
   clock_cx: "400"
   clock_cy: "240"
+  network_transport: "wifi"
+  disable_updates: "false"
+  network_package_suffix: ${ "_ethernet" if network_transport == "ethernet" else "" }
+  firmware_update_package_suffix: ${ "_disabled" if disable_updates == "true" else "" }
+  backlight_pwm_frequency: ${ "20000Hz" if network_transport == "ethernet" else "1000Hz" }
 
 packages:
+  # ---------------------------------------------------------------------------
+  # Device, assets, and LVGL base
+  # ---------------------------------------------------------------------------
+  entity_names:    !include ../../common/config/entity_names.yaml
   device:          !include device/device.yaml
-  fonts:           !include ../../common/assets/fonts.yaml
   icons:           !include ../../common/assets/icons.yaml
   fonts_device:    !include device/fonts.yaml
   button_theme:    !include ../../common/theme/button.yaml
+  # ---------------------------------------------------------------------------
+  # Configuration
+  # ---------------------------------------------------------------------------
   colors:          !include ../../common/config/colors.yaml
   button_order:    !include ../../common/config/button_order.yaml
   display_config:  !include ../../common/config/display.yaml
@@ -51,18 +63,28 @@ packages:
   btn_10:          !include { file: ../../common/config/button_template.yaml, vars: { num: "10" } }
   btn_11:          !include { file: ../../common/config/button_template.yaml, vars: { num: "11" } }
   btn_12:          !include { file: ../../common/config/button_template.yaml, vars: { num: "12" } }
-  connectivity:    !include ../../common/addon/connectivity.yaml
-  improv_serial:   !include ../../common/addon/improv_serial.yaml
+  # ---------------------------------------------------------------------------
+  # Addons
+  # ---------------------------------------------------------------------------
+  connectivity:    !include ../../common/addon/connectivity${network_package_suffix}.yaml
+  api_navigate:    !include ../../common/device/api_navigate.yaml
   time_sync:       !include ../../common/addon/time.yaml
   backlight:       !include ../../common/addon/backlight.yaml
   bl_schedule:     !include ../../common/addon/backlight_schedule.yaml
-  network:         !include ../../common/addon/network.yaml
-  fw_update:       !include ../../common/addon/firmware_update.yaml
-  screen_loading:  !include ../../common/device/screen_loading.yaml
-  screen_wifi:     !include ../../common/device/screen_wifi_setup.yaml
+  network:         !include ../../common/addon/network${network_package_suffix}.yaml
+  fw_update:       !include ../../common/addon/firmware_update${firmware_update_package_suffix}.yaml
+  # ---------------------------------------------------------------------------
+  # Screens (loading must be first page for LVGL startup)
+  # ---------------------------------------------------------------------------
+  screen_loading:  !include ../../common/device/screen_loading${network_package_suffix}.yaml
+  screen_network:  !include ../../common/device/screen_${network_transport}_setup.yaml
   screen_ha:       !include ../../common/device/screen_ha_setup.yaml
   screen_ha_act:   !include ../../common/device/screen_ha_actions.yaml
   screen_setup:    !include ../../common/device/screen_button_setup.yaml
   screen_clock:    !include ../../common/device/screen_clock.yaml
+  screen_art:      !include ../../common/device/screen_cover_art.yaml
+  # ---------------------------------------------------------------------------
+  # Main page (after setup screens)
+  # ---------------------------------------------------------------------------
   lvgl:            !include device/lvgl.yaml
   sensors:         !include device/sensors.yaml
