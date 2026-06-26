@@ -21,6 +21,19 @@ inline void media_set_metadata_text(lv_obj_t *label, esphome::StringRef value,
   lv_label_set_text(label, text.c_str());
 }
 
+inline void media_refresh_artist_text(lv_obj_t *artist_lbl,
+                                      const std::string &entity_id) {
+  if (!artist_lbl || entity_id.empty()) return;
+  lv_label_set_text(artist_lbl, "");
+  ha_get_attribute(
+    entity_id, std::string("media_artist"),
+    std::function<void(esphome::StringRef)>(
+      [artist_lbl](esphome::StringRef artist) {
+        media_set_metadata_text(artist_lbl, artist, "");
+      })
+  );
+}
+
 inline bool media_seek_pending_active(SliderCtx *ctx) {
   return ctx && ctx->media_seek_pending &&
          (esphome::millis() - ctx->media_seek_pending_ms) < MEDIA_SEEK_PENDING_TIMEOUT_MS;
@@ -217,7 +230,7 @@ inline void setup_media_now_playing_layout(lv_obj_t *btn, lv_obj_t *icon_lbl,
   }
   if (artist_lbl) {
     const lv_font_t *font = lv_obj_get_style_text_font(artist_lbl, LV_PART_MAIN);
-    if (reset_text) lv_label_set_text(artist_lbl, "--");
+    if (reset_text) lv_label_set_text(artist_lbl, "");
     lv_label_set_long_mode(artist_lbl, LV_LABEL_LONG_DOT);
     if (font && font->line_height > 0) lv_obj_set_size(artist_lbl, text_width, font->line_height);
     else lv_obj_set_width(artist_lbl, text_width);
@@ -510,15 +523,16 @@ inline void subscribe_media_now_playing_state(MediaNowPlayingCtx *ctx,
   ha_subscribe_attribute(
     entity_id, std::string("media_title"),
     std::function<void(esphome::StringRef)>(
-      [title_lbl](esphome::StringRef title) {
+      [title_lbl, artist_lbl, entity_id](esphome::StringRef title) {
         media_set_metadata_text(title_lbl, title, "--");
+        media_refresh_artist_text(artist_lbl, entity_id);
       })
   );
   ha_subscribe_attribute(
     entity_id, std::string("media_artist"),
     std::function<void(esphome::StringRef)>(
       [artist_lbl](esphome::StringRef artist) {
-        media_set_metadata_text(artist_lbl, artist, "--");
+        media_set_metadata_text(artist_lbl, artist, "");
       })
   );
   if (ctx && ctx->progress_slider) {
@@ -543,8 +557,8 @@ inline MediaVolumeCtx *create_media_volume_context(lv_obj_t *btn,
                                                    int width_compensation_percent = 100,
                                                    lv_obj_t *pct_lbl = nullptr,
                                                    lv_obj_t *unit_lbl = nullptr,
-                                                   std::function<void()> pause_home_idle = nullptr,
-                                                   std::function<void()> resume_home_idle = nullptr) {
+                                                   std::function<void()> suspend_display_takeover = nullptr,
+                                                   std::function<void()> resume_display_takeover = nullptr) {
   MediaVolumeCtx *ctx = new MediaVolumeCtx();
   ctx->entity_id = p.entity;
   ctx->label = media_label(p);
@@ -562,8 +576,8 @@ inline MediaVolumeCtx *create_media_volume_context(lv_obj_t *btn,
   ctx->unit_font = unit_font;
   ctx->label_font = label_font;
   ctx->icon_font = icon_font;
-  ctx->pause_home_idle = pause_home_idle;
-  ctx->resume_home_idle = resume_home_idle;
+  ctx->suspend_display_takeover = suspend_display_takeover;
+  ctx->resume_display_takeover = resume_display_takeover;
   if (btn) lv_obj_set_user_data(btn, ctx);
   return ctx;
 }
@@ -604,6 +618,66 @@ inline void subscribe_media_volume_state(MediaVolumeCtx *ctx) {
       })
   );
 }
+
+#ifdef USE_MEDIA_PLAYER
+inline void open_device_volume_modal(lv_obj_t *anchor,
+                                     esphome::media_player::MediaPlayer *player,
+                                     const lv_font_t *value_font,
+                                     const lv_font_t *number_font,
+                                     const lv_font_t *unit_font,
+                                     const lv_font_t *label_font,
+                                     const lv_font_t *icon_font,
+                                     int width_compensation_percent = 100,
+                                     std::function<bool()> mic_muted = nullptr,
+                                     std::function<void(bool)> set_mic_muted = nullptr) {
+  if (!player) return;
+  static MediaVolumeCtx *ctx = nullptr;
+  static esphome::media_player::MediaPlayer *subscribed_player = nullptr;
+  if (!ctx) {
+    ctx = new MediaVolumeCtx();
+    ctx->max_pct = 100;
+    ctx->accent_color = DEFAULT_SLIDER_COLOR;
+    ctx->secondary_color = DEFAULT_OFF_COLOR;
+    ctx->tertiary_color = DEFAULT_TERTIARY_COLOR;
+  }
+  if (subscribed_player != player) {
+    subscribed_player = player;
+    MediaVolumeCtx *callback_ctx = ctx;
+    player->add_on_state_callback([callback_ctx, player](esphome::media_player::MediaPlayerState) {
+      int pct = media_clamp_percent((int)(player->volume * 100.0f + 0.5f));
+      if (media_volume_pending_active(callback_ctx) && callback_ctx->pending_pct == pct) {
+        callback_ctx->pending_pct = -1;
+        callback_ctx->pending_until_ms = 0;
+      }
+      if (!media_volume_pending_active(callback_ctx)) {
+        callback_ctx->current_pct = pct;
+        media_volume_set_card_value(callback_ctx, pct);
+        media_volume_set_modal_value(callback_ctx, pct);
+      }
+    });
+  }
+  ctx->entity_id.clear();
+  ctx->label = espcontrol_i18n(std::string("Device Volume"));
+  ctx->btn = anchor;
+  ctx->current_pct = media_clamp_percent((int)(player->volume * 100.0f + 0.5f));
+  ctx->pending_pct = -1;
+  ctx->pending_until_ms = 0;
+  ctx->width_compensation_percent = normalize_width_compensation_percent(width_compensation_percent);
+  ctx->value_font = value_font;
+  ctx->number_font = number_font ? number_font : value_font;
+  ctx->unit_font = unit_font;
+  ctx->label_font = label_font;
+  ctx->icon_font = icon_font;
+  ctx->available = true;
+  ctx->mic_muted = mic_muted;
+  ctx->set_mic_muted = set_mic_muted;
+  ctx->apply_percent = [player](int pct) {
+    float volume = media_clamp_percent(pct) / 100.0f;
+    player->make_call().set_volume(volume).perform();
+  };
+  media_volume_open_modal(ctx);
+}
+#endif
 
 inline void subscribe_media_slider_state(lv_obj_t *btn_ptr,
                                          lv_obj_t *slider,

@@ -10,6 +10,13 @@ function setFavicon() {
   if (!link.parentNode) document.head.appendChild(link);
 }
 
+function setViewportMeta() {
+  var meta = document.querySelector('meta[name="viewport"]') || document.createElement("meta");
+  meta.name = "viewport";
+  meta.content = "width=device-width,initial-scale=1";
+  if (!meta.parentNode) document.head.appendChild(meta);
+}
+
 function addSupportButton() {
   if (document.querySelector(".sp-support-btn")) return;
   var link = document.createElement("a");
@@ -19,13 +26,16 @@ function addSupportButton() {
   link.rel = "noopener";
   link.innerHTML = '<img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="60" style="border-radius:999px;">';
   document.body.appendChild(link);
+  syncTabChrome();
 }
 
 function init() {
+  setViewportMeta();
   setFavicon();
 
   // Set CSS custom properties from the active device orientation.
   syncPreviewOrientation();
+  startInitialScreenRotationCheck();
 
   var style = document.createElement("style");
   style.textContent = CSS;

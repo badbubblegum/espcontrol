@@ -10,7 +10,6 @@ if (typeof globalThis !== "undefined" && globalThis.__ESPCONTROL_TEST_HOOKS__) {
     cardContractCardLabel: cardContractCardLabel,
     cardContractAllowInSubpage: cardContractAllowInSubpage,
     cardContractPickerKey: cardContractPickerKey,
-    cardContractExperimental: cardContractExperimental,
     cardContractHidden: cardContractHidden,
     cardContractOptions: cardContractOptions,
     cardContractDefaultConfig: cardContractDefaultConfig,
@@ -24,6 +23,7 @@ if (typeof globalThis !== "undefined" && globalThis.__ESPCONTROL_TEST_HOOKS__) {
     createBackupConfig: createBackupConfig,
     normalizeBackupConfig: normalizeBackupConfig,
     planBackupImport: planBackupImport,
+    backupExportFileName: backupExportFileName,
     switchConfirmationEnabled: switchConfirmationEnabled,
     switchConfirmationMode: switchConfirmationMode,
     switchConfirmationMessage: switchConfirmationMessage,
@@ -34,6 +34,7 @@ if (typeof globalThis !== "undefined" && globalThis.__ESPCONTROL_TEST_HOOKS__) {
     cardOnPattern: cardOnPattern,
     setCardOnPattern: setCardOnPattern,
     sensorActiveColorEnabled: sensorActiveColorEnabled,
+    sensorCardIsLocal: sensorCardIsLocal,
     sensorStateLabelsEnabled: sensorStateLabelsEnabled,
     sensorStateInput: sensorStateInput,
     sensorStateOutput: sensorStateOutput,
@@ -50,12 +51,20 @@ if (typeof globalThis !== "undefined" && globalThis.__ESPCONTROL_TEST_HOOKS__) {
     coverModeOptionValues: coverModeOptionValues,
     normalizeCoverMode: normalizeCoverMode,
     normalizeCoverPosition: normalizeCoverPosition,
+    coverControlTabDefinitions: coverControlTabDefinitions,
+    coverControlTabs: coverControlTabs,
+    normalizeCoverControlTabs: normalizeCoverControlTabs,
+    normalizeCoverOptions: normalizeCoverOptions,
     lightTempDefaultRange: lightTempDefaultRange,
     lightTempParseRange: lightTempParseRange,
     lightTempClampMin: lightTempClampMin,
     lightTempClampMax: lightTempClampMax,
     lightTempLegacySensorValues: lightTempLegacySensorValues,
     lightTempSensorNeedsCleanup: lightTempSensorNeedsCleanup,
+    lightControlTabDefinitions: lightControlTabDefinitions,
+    lightControlTabs: lightControlTabs,
+    normalizeLightControlTabs: normalizeLightControlTabs,
+    normalizeLightControlOptions: normalizeLightControlOptions,
     doorWindowActiveColorEnabled: doorWindowActiveColorEnabled,
     presenceActiveColorEnabled: presenceActiveColorEnabled,
     garageModeOptionValues: garageModeOptionValues,
@@ -80,10 +89,55 @@ if (typeof globalThis !== "undefined" && globalThis.__ESPCONTROL_TEST_HOOKS__) {
     normalizeMediaOptions: normalizeMediaOptions,
     mediaVolumeMax: mediaVolumeMax,
     setMediaVolumeMax: setMediaVolumeMax,
+    imageRefreshIntervalValues: imageRefreshIntervalValues,
+    imageRefreshModeValues: imageRefreshModeValues,
+    imageModalModeValues: imageModalModeValues,
+    normalizeImageOptions: normalizeImageOptions,
+    imageLabelEnabled: imageLabelEnabled,
+    imageIconEnabled: imageIconEnabled,
+    imageModalMode: imageModalMode,
+    imageRefreshInterval: imageRefreshInterval,
+    imageRefreshMode: imageRefreshMode,
+    imageCardLimit: imageCardLimit,
+    imageCardCountForTest: function (snapshot, candidate) {
+      var oldGrid = state.grid;
+      var oldButtons = state.buttons;
+      var oldSubpages = state.subpages;
+      state.grid = (snapshot && snapshot.grid) || [];
+      state.buttons = (snapshot && snapshot.buttons) || [];
+      state.subpages = (snapshot && snapshot.subpages) || {};
+      try {
+        return imageCardCountWithCandidate(candidate);
+      } finally {
+        state.grid = oldGrid;
+        state.buttons = oldButtons;
+        state.subpages = oldSubpages;
+      }
+    },
+    imageCardCandidateAllowedForTest: function (snapshot, candidate) {
+      var oldGrid = state.grid;
+      var oldButtons = state.buttons;
+      var oldSubpages = state.subpages;
+      state.grid = (snapshot && snapshot.grid) || [];
+      state.buttons = (snapshot && snapshot.buttons) || [];
+      state.subpages = (snapshot && snapshot.subpages) || {};
+      try {
+        return imageCardCountWithCandidate(candidate) <= imageCardLimit();
+      } finally {
+        state.grid = oldGrid;
+        state.buttons = oldButtons;
+        state.subpages = oldSubpages;
+      }
+    },
     actionCardStateEntity: actionCardStateEntity,
     actionCardStateUnit: actionCardStateUnit,
     actionCardStatePrecision: actionCardStatePrecision,
     actionCardStateDisplayMode: actionCardStateDisplayMode,
+    actionCardIsLocal: actionCardIsLocal,
+    actionScriptConfirmationEnabled: actionScriptConfirmationEnabled,
+    actionScriptConfirmationMessage: actionScriptConfirmationMessage,
+    actionScriptConfirmationYesText: actionScriptConfirmationYesText,
+    actionScriptConfirmationNoText: actionScriptConfirmationNoText,
     alarmPinRequired: alarmPinRequired,
     alarmIconDisplayMode: alarmIconDisplayMode,
     alarmLabelDisplayMode: alarmLabelDisplayMode,
@@ -94,8 +148,12 @@ if (typeof globalThis !== "undefined" && globalThis.__ESPCONTROL_TEST_HOOKS__) {
     alarmVisibleActions: alarmVisibleActions,
     normalizeClimateLabelDisplayMode: normalizeClimateLabelDisplayMode,
     normalizeClimateNumberDisplayMode: normalizeClimateNumberDisplayMode,
+    normalizeClimateTemperatureStep: normalizeClimateTemperatureStep,
     climateDefaultLabelDisplayMode: climateDefaultLabelDisplayMode,
     climateDefaultNumberDisplayMode: climateDefaultNumberDisplayMode,
+    climateDefaultTemperatureStep: climateDefaultTemperatureStep,
+    climateTemperatureStep: climateTemperatureStep,
+    setClimateTemperatureStep: setClimateTemperatureStep,
     climatePrecisionValues: climatePrecisionValues,
     parseClimatePrecisionConfig: parseClimatePrecisionConfig,
     normalizeClimatePrecisionConfig: normalizeClimatePrecisionConfig,
@@ -104,19 +162,17 @@ if (typeof globalThis !== "undefined" && globalThis.__ESPCONTROL_TEST_HOOKS__) {
         return option.value;
       });
     },
+    coverModeOptionLabels: function (currentMode) {
+      var options = coverModeOptionsForSettings(currentMode || "");
+      return options.map(function (option) { return option[0] + ":" + option[1]; });
+    },
     normalizeAlarmOptions: normalizeAlarmOptions,
-    buttonTypePickerKeysForExperimental: function (enabled, isSub, selectedTypeKey) {
-      var oldExperimental = state.developerExperimentalFeatures;
-      state.developerExperimentalFeatures = !!enabled;
+    buttonTypePickerKeysFor: function (isSub, selectedTypeKey) {
       var keys = buttonTypePickerKeys(!!isSub, selectedTypeKey || "");
-      state.developerExperimentalFeatures = oldExperimental;
       return keys;
     },
-    buttonTypeVisibleInPickerForExperimental: function (key, enabled, isSub) {
-      var oldExperimental = state.developerExperimentalFeatures;
-      state.developerExperimentalFeatures = !!enabled;
+    buttonTypeVisibleInPickerFor: function (key, isSub) {
       var visible = buttonTypeVisibleInPicker(key, !!isSub);
-      state.developerExperimentalFeatures = oldExperimental;
       return visible;
     },
     buttonTypePickerKeysForInfoOnly: function (enabled, selectedTypeKey) {
@@ -126,6 +182,10 @@ if (typeof globalThis !== "undefined" && globalThis.__ESPCONTROL_TEST_HOOKS__) {
       CFG.infoOnly = oldInfoOnly;
       return keys;
     },
+    buttonTypePickerOptionsFor: function (isSub, selectedTypeKey) {
+      return buttonTypePickerOptionList(!!isSub, selectedTypeKey == null ? null : selectedTypeKey);
+    },
+    defaultButtonTypeForPicker: defaultButtonTypeForPicker,
     buttonTypesMissingCardMetadata: function () {
       var missing = [];
       for (var key in BUTTON_TYPES) {
@@ -147,7 +207,6 @@ if (typeof globalThis !== "undefined" && globalThis.__ESPCONTROL_TEST_HOOKS__) {
         label: buttonTypeRegistryValue(typeDef, "label", typeDef.key || "Toggle"),
         allowInSubpage: !!buttonTypeRegistryValue(typeDef, "allowInSubpage", false),
         pickerKey: buttonTypeRegistryValue(typeDef, "pickerKey", "") || "",
-        experimental: buttonTypeRegistryValue(typeDef, "experimental", "") || "",
         hidden: !!buttonTypeRegistryValue(typeDef, "hidden", false),
         domains: entity && entity.domains
           ? cardMetadataValue(entity.domains, {}, {}) || []
@@ -183,19 +242,65 @@ if (typeof globalThis !== "undefined" && globalThis.__ESPCONTROL_TEST_HOOKS__) {
     buttonConfigNeedsMigration: buttonConfigNeedsMigration,
     subpageConfigNeedsMigration: subpageConfigNeedsMigration,
     normalizeTemperatureUnit: normalizeTemperatureUnit,
+    normalizeHomeAssistantArtworkPort: normalizeHomeAssistantArtworkPort,
     defaultTimezoneOptions: defaultTimezoneOptions,
     timezoneOptionsWithFallback: timezoneOptionsWithFallback,
+    effectiveTimezoneOptionForWeb: effectiveTimezoneOptionForWeb,
     normalizeScreensaverAction: normalizeScreensaverAction,
     screensaverActionOption: screensaverActionOption,
+    clockBarVisibleInPreviewFor: function (clockBarOn, screensaverAction) {
+      var oldClockBarOn = state.clockBarOn;
+      var oldScreensaverAction = state.screensaverAction;
+      state.clockBarOn = !!clockBarOn;
+      state.screensaverAction = normalizeScreensaverAction(screensaverAction);
+      var visible = clockBarVisibleInPreview();
+      state.clockBarOn = oldClockBarOn;
+      state.screensaverAction = oldScreensaverAction;
+      return visible;
+    },
+    clockBarStateAfterEvents: function (events) {
+      var oldClockBarOn = state.clockBarOn;
+      var oldSourceValues = state._clockBarStateValues;
+      state.clockBarOn = false;
+      state._clockBarStateValues = {};
+      (events || []).forEach(function (event) {
+        var keys = entityStateKeys(event || {});
+        var matchedKey = "";
+        for (var i = 0; i < keys.length; i++) {
+          if (SSE_ALIAS_GROUPS.clockBar.indexOf(keys[i]) !== -1) {
+            matchedKey = keys[i];
+            break;
+          }
+        }
+        applyClockBarStateValue(
+          event && event.state != null ? String(event.state) : "",
+          event || {},
+          matchedKey
+        );
+      });
+      var result = state.clockBarOn;
+      state.clockBarOn = oldClockBarOn;
+      state._clockBarStateValues = oldSourceValues;
+      return result;
+    },
+    removedLegacyStateEvent: function (event) {
+      var keys = entityStateKeys(event || {});
+      var id = keys[0] || event && event.id || "";
+      return isRemovedLegacyStateEvent(id, event || {});
+    },
     normalizeScreensaverDimmedBrightness: normalizeScreensaverDimmedBrightness,
+    webserverMockNow: webserverMockNow,
+    webserverNow: webserverNow,
     previewHtmlValue: previewHtmlValue,
     buttonTypePreviewFor: function (type, button, options) {
       var oldTimezone = state.timezone;
+      var oldActiveTimezone = state.activeTimezone;
       var oldUnit = state.temperatureUnit;
       var oldClockFormat = state.clockFormat;
       var oldLanguage = state.language;
       options = options || {};
       if (options.timezone != null) state.timezone = options.timezone;
+      if (options.activeTimezone != null) state.activeTimezone = options.activeTimezone;
       if (options.temperatureUnit != null) {
         state.temperatureUnit = normalizeTemperatureUnit(options.temperatureUnit);
       }
@@ -206,15 +311,22 @@ if (typeof globalThis !== "undefined" && globalThis.__ESPCONTROL_TEST_HOOKS__) {
         ? typeDef.renderPreview(button || {}, { escHtml: escHtml, cardSize: options.cardSize || 1 })
         : null;
       state.timezone = oldTimezone;
+      state.activeTimezone = oldActiveTimezone;
       state.temperatureUnit = oldUnit;
       state.clockFormat = oldClockFormat;
       state.language = oldLanguage;
       return preview;
     },
+    buttonTypePreviewForMockNow: function (type, button, options) {
+      return withWebserverMockNow(function () {
+        return globalThis.__ESPCONTROL_TEST_HOOKS__.config.buttonTypePreviewFor(type, button, options);
+      });
+    },
     networkPreviewIconSlug: networkPreviewIconSlug,
     displayFirmwareVersion: displayFirmwareVersion,
     firmwareVersionFromMetadata: firmwareVersionFromMetadata,
     firmwareInfoFromPublicManifest: firmwareInfoFromPublicManifest,
+    firmwareInfosFromPublicVersions: firmwareInfosFromPublicVersions,
     firmwareVersionLabelFor: function (version, pending) {
       var oldVersion = state.firmwareVersion;
       var oldPending = state.firmwareVersionRefreshPending;
@@ -229,6 +341,12 @@ if (typeof globalThis !== "undefined" && globalThis.__ESPCONTROL_TEST_HOOKS__) {
     entityDetailPaths: entityDetailPaths,
     entityInitialDetail: entityInitialDetail,
     entityLookupNames: entityLookupNames,
+    coverArtHideExternalInputPostUrls: coverArtHideExternalInputPostUrls,
+    coverArtDelayPostUrls: coverArtDelayPostUrls,
+    coverArtTouchPausePostUrls: coverArtTouchPausePostUrls,
+    coverArtTrackOverlayDurationPostUrls: coverArtTrackOverlayDurationPostUrls,
+    homeAssistantArtworkPortPostUrls: homeAssistantArtworkPortPostUrls,
+    voiceServicesPostUrls: voiceServicesPostUrls,
     firmwareUpdateControlsVisibleFor: function (transport, supported) {
       var oldTransport = state.networkTransport;
       var oldSupported = state.firmwareUpdateControlsSupported;
@@ -249,6 +367,9 @@ if (typeof globalThis !== "undefined" && globalThis.__ESPCONTROL_TEST_HOOKS__) {
       var oldInstallSupported = state.firmwareInstallControlsSupported;
       var oldInstallTarget = state.firmwareInstallTargetVersion;
       var oldInstallPostPending = state.firmwareInstallPostPending;
+      var oldOptions = state.firmwareVersionOptions;
+      var oldSelected = state.firmwareSelectedVersion;
+      var oldIndexLoaded = state.firmwareVersionIndexLoaded;
       state.firmwareVersion = "";
       state.firmwareLatestVersion = "";
       state.firmwareUpdateState = "";
@@ -258,6 +379,9 @@ if (typeof globalThis !== "undefined" && globalThis.__ESPCONTROL_TEST_HOOKS__) {
       state.firmwareInstallControlsSupported = false;
       state.firmwareInstallTargetVersion = "";
       state.firmwareInstallPostPending = false;
+      state.firmwareVersionOptions = [];
+      state.firmwareSelectedVersion = "";
+      state.firmwareVersionIndexLoaded = false;
       setFirmwareVersion(initialVersion);
       setFirmwareUpdateInfo(updateInfo || {});
       var result = {
@@ -275,6 +399,9 @@ if (typeof globalThis !== "undefined" && globalThis.__ESPCONTROL_TEST_HOOKS__) {
       state.firmwareInstallControlsSupported = oldInstallSupported;
       state.firmwareInstallTargetVersion = oldInstallTarget;
       state.firmwareInstallPostPending = oldInstallPostPending;
+      state.firmwareVersionOptions = oldOptions;
+      state.firmwareSelectedVersion = oldSelected;
+      state.firmwareVersionIndexLoaded = oldIndexLoaded;
       return result;
     },
     firmwareStateAfterPublicManifest: function (initialVersion, manifest) {
@@ -284,12 +411,18 @@ if (typeof globalThis !== "undefined" && globalThis.__ESPCONTROL_TEST_HOOKS__) {
       var oldReleaseUrl = state.firmwareReleaseUrl;
       var oldInstallSupported = state.firmwareInstallControlsSupported;
       var oldInstallPostPending = state.firmwareInstallPostPending;
+      var oldOptions = state.firmwareVersionOptions;
+      var oldSelected = state.firmwareSelectedVersion;
+      var oldIndexLoaded = state.firmwareVersionIndexLoaded;
       state.firmwareVersion = "";
       state.firmwareLatestVersion = "";
       state.firmwareUpdateState = "";
       state.firmwareReleaseUrl = "";
       state.firmwareInstallControlsSupported = true;
       state.firmwareInstallPostPending = false;
+      state.firmwareVersionOptions = [];
+      state.firmwareSelectedVersion = "";
+      state.firmwareVersionIndexLoaded = false;
       setFirmwareVersion(initialVersion);
       setPublicFirmwareInfo(firmwareInfoFromPublicManifest(manifest));
       var result = {
@@ -306,6 +439,75 @@ if (typeof globalThis !== "undefined" && globalThis.__ESPCONTROL_TEST_HOOKS__) {
       state.firmwareReleaseUrl = oldReleaseUrl;
       state.firmwareInstallControlsSupported = oldInstallSupported;
       state.firmwareInstallPostPending = oldInstallPostPending;
+      state.firmwareVersionOptions = oldOptions;
+      state.firmwareSelectedVersion = oldSelected;
+      state.firmwareVersionIndexLoaded = oldIndexLoaded;
+      return result;
+    },
+    firmwareStateAfterVersionIndex: function (initialVersion, versionIndex, selectedVersion) {
+      var oldVersion = state.firmwareVersion;
+      var oldLatest = state.firmwareLatestVersion;
+      var oldUpdateState = state.firmwareUpdateState;
+      var oldReleaseUrl = state.firmwareReleaseUrl;
+      var oldOtaUrl = state.firmwareOtaUrl;
+      var oldOtaFilename = state.firmwareOtaFilename;
+      var oldOtaMd5 = state.firmwareOtaMd5;
+      var oldInstallSupported = state.firmwareInstallControlsSupported;
+      var oldOptions = state.firmwareVersionOptions;
+      var oldSelected = state.firmwareSelectedVersion;
+      var oldIndexLoaded = state.firmwareVersionIndexLoaded;
+      state.firmwareVersion = "";
+      state.firmwareLatestVersion = "";
+      state.firmwareUpdateState = "";
+      state.firmwareReleaseUrl = "";
+      state.firmwareOtaUrl = "";
+      state.firmwareOtaFilename = "";
+      state.firmwareOtaMd5 = "";
+      state.firmwareInstallControlsSupported = true;
+      state.firmwareVersionOptions = [];
+      state.firmwareSelectedVersion = "";
+      state.firmwareVersionIndexLoaded = false;
+      setFirmwareVersion(initialVersion);
+      setPublicFirmwareVersions(firmwareInfosFromPublicVersions(versionIndex));
+      if (selectedVersion) state.firmwareSelectedVersion = selectedVersion;
+      var selected = selectedFirmwareInfo();
+      var result = {
+        latest: state.firmwareLatestVersion,
+        selected: selected && selected.latest_version,
+        installAvailable: firmwareInstallAvailable(),
+        selectorVisible: firmwareVersionSelectorVisible(),
+        installedSelected: selectedFirmwareMatchesInstalled(),
+      };
+      state.firmwareVersion = oldVersion;
+      state.firmwareLatestVersion = oldLatest;
+      state.firmwareUpdateState = oldUpdateState;
+      state.firmwareReleaseUrl = oldReleaseUrl;
+      state.firmwareOtaUrl = oldOtaUrl;
+      state.firmwareOtaFilename = oldOtaFilename;
+      state.firmwareOtaMd5 = oldOtaMd5;
+      state.firmwareInstallControlsSupported = oldInstallSupported;
+      state.firmwareVersionOptions = oldOptions;
+      state.firmwareSelectedVersion = oldSelected;
+      state.firmwareVersionIndexLoaded = oldIndexLoaded;
+      return result;
+    },
+    firmwareFailureStatusFor: function (message) {
+      var oldError = state.firmwareInstallError;
+      var oldStatus = state.firmwareInstallStatus;
+      var oldUpdateState = state.firmwareUpdateState;
+      var oldTarget = state.firmwareInstallTargetVersion;
+      var oldPostPending = state.firmwareInstallPostPending;
+      failPublicFirmwareUpload(message);
+      var result = {
+        error: state.firmwareInstallError,
+        updateState: state.firmwareUpdateState,
+        installStatus: state.firmwareInstallStatus,
+      };
+      state.firmwareInstallError = oldError;
+      state.firmwareInstallStatus = oldStatus;
+      state.firmwareUpdateState = oldUpdateState;
+      state.firmwareInstallTargetVersion = oldTarget;
+      state.firmwareInstallPostPending = oldPostPending;
       return result;
     },
     findDuplicatePlacementFor: function (grid, start, size, maxSlots) {
@@ -338,13 +540,16 @@ if (typeof globalThis !== "undefined" && globalThis.__ESPCONTROL_TEST_HOOKS__) {
       state.screensaverTimeoutMax = oldMax;
       return supported;
     },
-    temperatureUnitSymbolFor: function (timezone, unit) {
+    temperatureUnitSymbolFor: function (timezone, unit, activeTimezone) {
       var oldTimezone = state.timezone;
+      var oldActiveTimezone = state.activeTimezone;
       var oldUnit = state.temperatureUnit;
       state.timezone = timezone || oldTimezone;
+      if (activeTimezone != null) state.activeTimezone = activeTimezone;
       state.temperatureUnit = normalizeTemperatureUnit(unit);
       var symbol = temperatureUnitSymbol();
       state.timezone = oldTimezone;
+      state.activeTimezone = oldActiveTimezone;
       state.temperatureUnit = oldUnit;
       return symbol;
     },

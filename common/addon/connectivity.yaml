@@ -38,11 +38,12 @@ wifi:
     ap_timeout: 90s
   on_connect:
     - script.execute: network_status_refresh
+    - script.execute: ntp_servers_apply_after_network
     - script.stop: wifi_reconnect_flow
     - script.stop: setup_screen_dim
     - lambda: |-
         ESP_LOGI("connectivity", "WiFi connected (%lu ms)", millis());
-        lv_label_set_text(id(loading_status_label), "Connected");
+        lv_label_set_text(id(loading_status_label), espcontrol_i18n("Connected"));
     - delay: 200ms
     - if:
         condition:
@@ -90,20 +91,44 @@ script:
     then:
       - script.execute: clock_bar_hide
       - lambda: |-
-          lv_label_set_text(id(wifi_setup_title), "WiFi Disconnected");
-          lv_label_set_text(id(wifi_setup_instructions), "Trying to reconnect\nto your saved network");
+          lv_label_set_text(id(wifi_setup_title), espcontrol_i18n("WiFi Disconnected"));
+          lv_label_set_text(
+              id(wifi_setup_instructions),
+              espcontrol_i18n("Trying to reconnect\nto your saved network"));
       - lvgl.page.show: wifi_setup_page
       - script.execute: setup_screen_dim
 
   - id: wifi_show_hotspot_setup
     mode: restart
     then:
+      - lvgl.resume:
+      - globals.set:
+          id: display_asleep
+          value: 'false'
+      - globals.set:
+          id: screen_schedule_asleep
+          value: 'false'
+      - globals.set:
+          id: screensaver_display_off_active
+          value: 'false'
+      - globals.set:
+          id: screensaver_dimmed_active
+          value: 'false'
+      - globals.set:
+          id: backlight_manual_off
+          value: 'false'
       - script.execute: clock_bar_hide
       - lambda: |-
-          std::string msg = "Connect to WiFi\n${friendly_name}\nOpen 192.168.4.1";
-          lv_label_set_text(id(wifi_setup_title), "WiFi Setup");
+          std::string msg = std::string(espcontrol_i18n("Connect to WiFi")) +
+                            "\n${friendly_name}\n" +
+                            espcontrol_i18n("Open 192.168.4.1");
+          lv_label_set_text(id(wifi_setup_title), espcontrol_i18n("WiFi Setup"));
           lv_label_set_text(id(wifi_setup_instructions), msg.c_str());
       - lvgl.page.show: wifi_setup_page
+      - light.turn_on:
+          id: display_backlight
+          brightness: 90%
+          transition_length: 500ms
       - script.execute: setup_screen_dim
 
   - id: wifi_reconnect_flow

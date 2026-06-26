@@ -1,16 +1,59 @@
 // ── Subpage helpers ────────────────────────────────────────────────────
 
-var SENSOR_STATE_LABELS_OPTION = "state_labels";
-var SENSOR_STATE_INPUT_OPTION = "state_input";
-var SENSOR_STATE_OUTPUT_OPTION = "state_output";
-var SENSOR_STATE_INPUT_2_OPTION = "state_input_2";
-var SENSOR_STATE_OUTPUT_2_OPTION = "state_output_2";
-var SENSOR_STATE_LOW_LABEL_OPTION = "state_low_label";
-var SENSOR_STATE_HIGH_LABEL_OPTION = "state_high_label";
-var CARD_ON_PATTERN_OPTION = "on_pattern";
+var SENSOR_STATE_LABELS_OPTION = cardContractOptionName("state_labels");
+var SENSOR_STATE_INPUT_OPTION = cardContractOptionName("state_input");
+var SENSOR_STATE_OUTPUT_OPTION = cardContractOptionName("state_output");
+var SENSOR_STATE_INPUT_2_OPTION = cardContractOptionName("state_input_2");
+var SENSOR_STATE_OUTPUT_2_OPTION = cardContractOptionName("state_output_2");
+var SENSOR_STATE_LOW_LABEL_OPTION = cardContractOptionName("state_low_label");
+var SENSOR_STATE_HIGH_LABEL_OPTION = cardContractOptionName("state_high_label");
+var CARD_ON_PATTERN_OPTION = cardContractOptionName("on_pattern");
+
+function normalizeWithRegisteredCardType(b) {
+  if (!b || typeof BUTTON_TYPES === "undefined") return false;
+  var typeDef = BUTTON_TYPES[b.type || ""];
+  if (!typeDef || typeof typeDef.normalizeConfig !== "function") return false;
+  typeDef.normalizeConfig(b);
+  return true;
+}
 
 function normalizeButtonConfig(b) {
   if (b) b.options = b.options || "";
+  if (b && b.type === "local") {
+    b.type = "action";
+    b.sensor = ACTION_CARD_LOCAL_ACTION;
+    b.unit = "";
+    b.precision = "";
+    b.options = "";
+    b.icon_on = "Auto";
+    if (!b.icon || b.icon === "Auto" || b.icon === "Flash") b.icon = "Gesture Tap";
+  }
+  if (b && b.type === "local_sensor") {
+    b.type = "sensor";
+    b.sensor = SENSOR_CARD_LOCAL_SENSOR;
+    b.icon_on = "Auto";
+    b.options = "";
+    if (b.precision !== "text" && b.precision !== "1" && b.precision !== "2") b.precision = "";
+    if (b.precision !== "text" && (!b.icon || b.icon === "Auto")) b.icon = "Auto";
+  }
+  if (b && b.type === "action" && b.sensor === "vacuum.start") {
+    b.type = "vacuum";
+    b.sensor = "start_stop";
+    b.unit = "";
+    b.precision = "";
+    b.options = "";
+    b.icon_on = "Auto";
+    if (!b.icon || b.icon === "Auto") b.icon = "Robot Vacuum";
+  }
+  if (b && b.type === "action" && b.sensor === "vacuum.return_to_base") {
+    b.type = "vacuum";
+    b.sensor = "dock";
+    b.unit = "";
+    b.precision = "";
+    b.options = "";
+    b.icon_on = "Auto";
+    if (!b.icon || b.icon === "Auto") b.icon = "Robot Vacuum Variant";
+  }
   if (b && isBrightnessSliderType(b.type) && b.sensor) {
     b.sensor = "";
   }
@@ -79,6 +122,10 @@ function normalizeButtonConfig(b) {
     if (b.sensor === "open" || b.sensor === "close") b.icon_on = "Auto";
     b.options = normalizeGarageOptions(b.options, b.sensor);
   }
+  if (b && b.type === "cover") {
+    b.sensor = normalizeCoverMode(b.sensor, true);
+    b.options = normalizeCoverOptionsForMode(b.options, b.sensor);
+  }
   if (b && b.type === "alarm") {
     b.sensor = "";
     b.unit = "";
@@ -101,11 +148,37 @@ function normalizeButtonConfig(b) {
   if (b && b.type === "webhook") {
     if (typeof normalizeWebhookConfig === "function") normalizeWebhookConfig(b);
   }
+  normalizeWithRegisteredCardType(b);
+  if (b && b.type === "screen_lock") {
+    b.entity = "";
+    b.label = "";
+    b.sensor = "";
+    b.unit = "";
+    b.precision = "";
+    b.options = "";
+    b.icon = "Lock";
+    b.icon_on = "Lock Open";
+  }
+  if (b && b.type === "image") {
+    b.icon_on = "Auto";
+    b.sensor = "";
+    b.unit = "";
+    b.precision = "";
+    b.options = normalizeImageOptions(b.options);
+    b.icon = imageIconEnabled(b) ? (b.icon && b.icon !== "Auto" ? b.icon : "Camera") : "Auto";
+    if (!imageLabelEnabled(b)) b.label = "";
+  }
   if (b && b.type === "light_switch") {
     b.sensor = "";
     b.unit = "";
     b.precision = "";
     b.options = "";
+  }
+  if (b && b.type === "light_control") {
+    b.sensor = "";
+    b.unit = "";
+    b.precision = "";
+    b.options = normalizeLightControlOptions(b.options);
   }
   if (b && b.type === "subpage") {
     applySubpagePresetConfig(b);
@@ -127,8 +200,23 @@ function normalizeButtonConfig(b) {
     b.icon_on = "Auto";
     b.options = "";
     if (!b.icon || b.icon === "Auto" || b.icon === "Chevron Down") b.icon = "Flash";
+  } else if (b && actionCardIsLocal(b)) {
+    b.unit = "";
+    b.precision = "";
+    b.icon_on = "Auto";
+    b.options = "";
+    if (!b.icon || b.icon === "Auto" || b.icon === "Flash") b.icon = "Gesture Tap";
+  } else if (b && b.type === "action") {
+    b.options = normalizeActionOptions(b.options, b.sensor);
   }
-  if (b && !b.type) {
+  if (b && sensorCardIsLocal(b)) {
+    b.type = "sensor";
+    b.sensor = SENSOR_CARD_LOCAL_SENSOR;
+    b.icon_on = "Auto";
+    b.options = "";
+    if (b.precision !== "text" && b.precision !== "1" && b.precision !== "2") b.precision = "";
+    if (b.precision !== "text" && (!b.icon || b.icon === "Auto")) b.icon = "Auto";
+  } else if (b && !b.type) {
     b.options = normalizeSwitchConfirmationOptions(b.options);
   } else if (b && b.type === "sensor") {
     b.options = normalizeSensorOptions(b.options, b.precision);
@@ -146,7 +234,7 @@ function normalizeButtonConfig(b) {
     if (!b.icon || b.icon === "Auto") b.icon = "Motion Sensor Off";
     if (!b.icon_on || b.icon_on === "Auto") b.icon_on = "Motion Sensor";
     b.options = normalizePresenceOptions(b.options);
-  } else if (b && b.type !== "action" && b.type !== "alarm" && b.type !== "alarm_action" && b.type !== "climate" && b.type !== "garage" && b.type !== "webhook" && b.type !== "media" && b.type !== "presence" && b.type !== "subpage" && !cardLargeNumbersSupported(b)) {
+  } else if (b && b.type !== "action" && b.type !== "alarm" && b.type !== "alarm_action" && b.type !== "climate" && b.type !== "cover" && b.type !== "garage" && b.type !== "webhook" && b.type !== "screen_lock" && b.type !== "media" && b.type !== "presence" && b.type !== "subpage" && b.type !== "image" && b.type !== "light_control" && b.type !== "vacuum" && b.type !== "lawn_mower" && !cardLargeNumbersSupported(b)) {
     b.options = "";
   }
   return b;
@@ -168,34 +256,48 @@ function fanCardDefaultIcon(type) {
   return cardContractFanDefaultIcon(type);
 }
 
-var SENSOR_LARGE_NUMBERS_OPTION = "large_numbers";
-var SENSOR_ACTIVE_COLOR_OPTION = "active_color";
-var SWITCH_CONFIRM_OFF_OPTION = "confirm_off";
-var SWITCH_CONFIRM_ON_OPTION = "confirm_on";
-var SWITCH_CONFIRM_MESSAGE_OPTION = "confirm_message";
-var SWITCH_CONFIRM_YES_OPTION = "confirm_yes";
-var SWITCH_CONFIRM_NO_OPTION = "confirm_no";
+var SENSOR_LARGE_NUMBERS_OPTION = cardContractOptionName("large_numbers");
+var SENSOR_LARGE_NUMBERS_OFF_VALUE = "off";
+var SENSOR_ACTIVE_COLOR_OPTION = cardContractOptionName("active_color");
+var SWITCH_CONFIRM_OFF_OPTION = cardContractOptionName("confirm_off");
+var SWITCH_CONFIRM_ON_OPTION = cardContractOptionName("confirm_on");
+var SWITCH_CONFIRM_MESSAGE_OPTION = cardContractOptionName("confirm_message");
+var SWITCH_CONFIRM_YES_OPTION = cardContractOptionName("confirm_yes");
+var SWITCH_CONFIRM_NO_OPTION = cardContractOptionName("confirm_no");
 var SWITCH_CONFIRM_DEFAULT_MESSAGE = "Turn off this device?";
 var SWITCH_CONFIRM_ON_DEFAULT_MESSAGE = "Turn on this device?";
 var SWITCH_CONFIRM_BOTH_DEFAULT_MESSAGE = "Toggle this device?";
 var SWITCH_CONFIRM_DEFAULT_YES = "Yes";
 var SWITCH_CONFIRM_DEFAULT_NO = "No";
-var ALARM_PIN_ARM_OPTION = "pin_arm";
-var ALARM_PIN_DISARM_OPTION = "pin_disarm";
-var ALARM_ACTIONS_OPTION = "actions";
-var ALARM_ICON_DISPLAY_OPTION = "icon_display";
-var ALARM_LABEL_DISPLAY_OPTION = "label_display";
-var GARAGE_LABEL_DISPLAY_OPTION = "label_display";
-var CLIMATE_LABEL_DISPLAY_OPTION = "label_display";
-var CLIMATE_NUMBER_DISPLAY_OPTION = "number_display";
-var MEDIA_VOLUME_MAX_OPTION = "volume_max";
-var SUBPAGE_KIND_OPTION = "subpage_kind";
+var ACTION_SCRIPT_CONFIRM_DEFAULT_MESSAGE = "Run this script?";
+var ALARM_PIN_ARM_OPTION = cardContractOptionName("pin_arm");
+var ALARM_PIN_DISARM_OPTION = cardContractOptionName("pin_disarm");
+var ALARM_ACTIONS_OPTION = cardContractOptionName("actions");
+var ALARM_ICON_DISPLAY_OPTION = cardContractOptionName("icon_display");
+var ALARM_LABEL_DISPLAY_OPTION = cardContractOptionName("label_display");
+var GARAGE_LABEL_DISPLAY_OPTION = cardContractOptionName("label_display");
+var CLIMATE_LABEL_DISPLAY_OPTION = cardContractOptionName("label_display");
+var CLIMATE_NUMBER_DISPLAY_OPTION = cardContractOptionName("number_display");
+var CLIMATE_TEMPERATURE_STEP_OPTION = cardContractOptionName("temperature_step");
+var MEDIA_VOLUME_MAX_OPTION = cardContractOptionName("volume_max");
+var SUBPAGE_KIND_OPTION = cardContractOptionName("subpage_kind");
+var IMAGE_LABEL_OPTION = cardContractOptionName("image_label");
+var IMAGE_ICON_OPTION = cardContractOptionName("image_icon");
+var IMAGE_MODAL_MODE_OPTION = cardContractOptionName("image_modal_mode");
+var IMAGE_REFRESH_OPTION = cardContractOptionName("image_refresh");
+var IMAGE_REFRESH_MODE_OPTION = cardContractOptionName("image_refresh_mode");
+var LIGHT_CONTROL_TABS_OPTION = cardContractOptionName("light_tabs");
+var COVER_CONTROL_TABS_OPTION = cardContractOptionName("cover_tabs");
+var IMAGE_CARD_LIMIT = Math.max(0, parseInt(CFG && CFG.imageCardLimit != null ? CFG.imageCardLimit : 4, 10) || 0);
 var ALARM_ACTIONS = [
   { value: "away", label: "Arm Away", service: "alarm_control_panel.alarm_arm_away", icon: "Shield Lock" },
   { value: "home", label: "Arm Home", service: "alarm_control_panel.alarm_arm_home", icon: "Shield Home" },
+  { value: "night", label: "Arm Night", service: "alarm_control_panel.alarm_arm_night", icon: "Weather Night" },
+  { value: "vacation", label: "Arm Vacation", service: "alarm_control_panel.alarm_arm_vacation", icon: "Airplane" },
   { value: "disarm", label: "Disarm", service: "alarm_control_panel.alarm_disarm", icon: "Shield Off" },
 ];
 var ALARM_DEFAULT_ACTIONS = ["away", "home", "disarm"];
+var ALARM_MAX_VISIBLE_ACTIONS = 3;
 
 function alarmBehaviorSpec() {
   var card = cardContractCard("alarm");
@@ -273,6 +375,20 @@ function setConfigOptionValue(options, name, value) {
   return out.join(",");
 }
 
+function largeNumbersExplicitlyDisabled(options) {
+  return configOptionValue(options, SENSOR_LARGE_NUMBERS_OPTION) === SENSOR_LARGE_NUMBERS_OFF_VALUE;
+}
+
+function copyLargeNumbersOption(out, options) {
+  if (largeNumbersExplicitlyDisabled(options)) {
+    return setConfigOptionValue(out, SENSOR_LARGE_NUMBERS_OPTION, SENSOR_LARGE_NUMBERS_OFF_VALUE);
+  }
+  if (configOptionEnabled(options, SENSOR_LARGE_NUMBERS_OPTION)) {
+    return setConfigOption(out, SENSOR_LARGE_NUMBERS_OPTION, true);
+  }
+  return out;
+}
+
 function normalizeMediaVolumeMax(value) {
   value = String(value || "").trim();
   if (!value) return "100";
@@ -291,35 +407,547 @@ function normalizeMediaOptions(options, mode) {
   if (mode === "volume" && maxVolume !== "100") {
     out = setConfigOptionValue(out, MEDIA_VOLUME_MAX_OPTION, maxVolume);
   }
-  if (configOptionEnabled(options, SENSOR_LARGE_NUMBERS_OPTION)) {
-    out = setConfigOption(out, SENSOR_LARGE_NUMBERS_OPTION, true);
+  out = copyLargeNumbersOption(out, options);
+  return out;
+}
+
+function imageRefreshIntervalValues() {
+  var spec = cardContractOptionSpec("image", IMAGE_REFRESH_OPTION);
+  return spec && spec.values ? spec.values.slice() : ["off", "10", "30", "60", "300"];
+}
+
+function imageRefreshModeValues() {
+  var spec = cardContractOptionSpec("image", IMAGE_REFRESH_MODE_OPTION);
+  return spec && spec.values ? spec.values.slice() : ["changes_timer", "timer"];
+}
+
+function imageModalModeValues() {
+  var spec = cardContractOptionSpec("image", IMAGE_MODAL_MODE_OPTION);
+  return spec && spec.values ? spec.values.slice() : ["fill", "fit"];
+}
+
+function normalizeImageRefreshInterval(value) {
+  value = String(value || "").trim();
+  return imageRefreshIntervalValues().indexOf(value) >= 0 ? value : "off";
+}
+
+function normalizeImageRefreshMode(value) {
+  value = String(value || "").trim();
+  return imageRefreshModeValues().indexOf(value) >= 0 ? value : "changes_timer";
+}
+
+function normalizeImageModalMode(value) {
+  value = String(value || "").trim();
+  return imageModalModeValues().indexOf(value) >= 0 ? value : "fill";
+}
+
+function imageRefreshInterval(b) {
+  return normalizeImageRefreshInterval(configOptionValue(b && b.options, IMAGE_REFRESH_OPTION));
+}
+
+function imageRefreshMode(b) {
+  return normalizeImageRefreshMode(configOptionValue(b && b.options, IMAGE_REFRESH_MODE_OPTION));
+}
+
+function imageCardLimit() {
+  return IMAGE_CARD_LIMIT;
+}
+
+function imageCardLimitMessage() {
+  if (IMAGE_CARD_LIMIT <= 0) return "Image cards are not available on this display.";
+  return "Image cards use shared firmware download slots. You can save up to " +
+    IMAGE_CARD_LIMIT + " image cards total across the main page and subpages.";
+}
+
+function isImageCard(button) {
+  return !!button && button.type === "image";
+}
+
+function activeGridSlots(grid) {
+  var slots = [];
+  var seen = {};
+  (grid || []).forEach(function (slot) {
+    if (slot <= 0 || seen[slot]) return;
+    seen[slot] = true;
+    slots.push(slot);
+  });
+  return slots;
+}
+
+function imageCardCountInButtons(buttons, grid) {
+  var count = 0;
+  var slots = activeGridSlots(grid);
+  if (!slots.length && buttons && buttons.length) {
+    for (var fallbackSlot = 1; fallbackSlot <= buttons.length; fallbackSlot++) {
+      slots.push(fallbackSlot);
+    }
+  }
+  slots.forEach(function (slot) {
+    if (isImageCard(buttons && buttons[slot - 1])) count++;
+  });
+  return count;
+}
+
+function imageCardCountInSubpage(sp) {
+  return imageCardCountInButtons(sp && sp.buttons, sp && sp.grid);
+}
+
+function imageCardCountInClipboardEntry(entry) {
+  var count = isImageCard(entry) ? 1 : 0;
+  if (entry && entry.subpageConfig) {
+    count += imageCardCountInSubpage(parseSubpageConfig(entry.subpageConfig));
+  }
+  return count;
+}
+
+function imageCardCountInClipboardEntries(entries) {
+  var count = 0;
+  (entries || []).forEach(function (entry) {
+    count += imageCardCountInClipboardEntry(entry);
+  });
+  return count;
+}
+
+function imageCardCountWithCandidate(candidate) {
+  var count = 0;
+  var matchedCandidate = false;
+
+  activeGridSlots(state.grid).forEach(function (slot) {
+    var button = state.buttons[slot - 1];
+    if (candidate && !candidate.isSub && candidate.slot === slot) {
+      button = candidate.button;
+      matchedCandidate = true;
+    }
+    if (isImageCard(button)) count++;
+  });
+
+  for (var homeSlot in state.subpages) {
+    var sp = state.subpages[homeSlot];
+    activeGridSlots(sp && sp.grid).forEach(function (slot) {
+      var button = sp && sp.buttons && sp.buttons[slot - 1];
+      if (candidate && candidate.isSub &&
+          String(candidate.homeSlot) === String(homeSlot) &&
+          candidate.slot === slot) {
+        button = candidate.button;
+        matchedCandidate = true;
+      }
+      if (isImageCard(button)) count++;
+    });
+  }
+
+  if (candidate && !matchedCandidate && isImageCard(candidate.button)) count++;
+  return count;
+}
+
+function canAddImageCards(extraCount) {
+  extraCount = parseInt(extraCount || 0, 10);
+  if (!isFinite(extraCount) || extraCount <= 0) return true;
+  return imageCardCountWithCandidate() + extraCount <= IMAGE_CARD_LIMIT;
+}
+
+function showImageCardLimitBanner() {
+  showBanner(imageCardLimitMessage(), "error");
+}
+
+function imageModalMode(b) {
+  return normalizeImageModalMode(configOptionValue(b && b.options, IMAGE_MODAL_MODE_OPTION));
+}
+
+function imageLabelEnabled(b) {
+  return !!(b && configOptionEnabled(b.options, IMAGE_LABEL_OPTION));
+}
+
+function imageIconEnabled(b) {
+  return !!(b && configOptionEnabled(b.options, IMAGE_ICON_OPTION));
+}
+
+function normalizeImageOptions(options) {
+  var out = "";
+  if (configOptionEnabled(options, IMAGE_LABEL_OPTION)) {
+    out = setConfigOption(out, IMAGE_LABEL_OPTION, true);
+  }
+  if (configOptionEnabled(options, IMAGE_ICON_OPTION)) {
+    out = setConfigOption(out, IMAGE_ICON_OPTION, true);
+  }
+  var modalMode = normalizeImageModalMode(configOptionValue(options, IMAGE_MODAL_MODE_OPTION));
+  if (modalMode !== "fill") {
+    out = setConfigOptionValue(out, IMAGE_MODAL_MODE_OPTION, modalMode);
   }
   return out;
 }
 
+function setImageLabelEnabled(b, enabled) {
+  if (!b) return "";
+  b.options = setConfigOption(b.options, IMAGE_LABEL_OPTION, !!enabled);
+  if (!enabled) b.label = "";
+  b.options = normalizeImageOptions(b.options);
+  return b.options;
+}
+
+function setImageIconEnabled(b, enabled) {
+  if (!b) return "";
+  b.options = setConfigOption(b.options, IMAGE_ICON_OPTION, !!enabled);
+  b.options = normalizeImageOptions(b.options);
+  return b.options;
+}
+
+function setImageModalMode(b, value) {
+  if (!b) return "";
+  var mode = normalizeImageModalMode(value);
+  b.options = setConfigOptionValue(b.options, IMAGE_MODAL_MODE_OPTION, mode === "fill" ? "" : mode);
+  b.options = normalizeImageOptions(b.options);
+  return b.options;
+}
+
+function setImageRefreshInterval(b, value) {
+  if (!b) return "";
+  var interval = normalizeImageRefreshInterval(value);
+  b.options = setConfigOptionValue(b.options, IMAGE_REFRESH_OPTION, interval === "off" ? "" : interval);
+  b.options = normalizeImageOptions(b.options);
+  return b.options;
+}
+
+function setImageRefreshMode(b, value) {
+  if (!b) return "";
+  var mode = normalizeImageRefreshMode(value);
+  b.options = setConfigOptionValue(
+    b.options,
+    IMAGE_REFRESH_MODE_OPTION,
+    mode === "changes_timer" ? "" : mode
+  );
+  b.options = normalizeImageOptions(b.options);
+  return b.options;
+}
+
+function lightControlTabDefinitions() {
+  return [
+    { value: "power", label: "Power" },
+    { value: "brightness", label: "Brightness" },
+    { value: "temperature", label: "Colour Temperature" },
+    { value: "color", label: "Colour Presets" },
+  ];
+}
+
+function lightControlDefaultTabs() {
+  return lightControlTabDefinitions().map(function (tab) { return tab.value; });
+}
+
+function normalizeLightControlTabs(value) {
+  var raw = String(value || "").trim();
+  var parts = raw ? raw.split("|") : lightControlDefaultTabs();
+  var definitions = lightControlTabDefinitions();
+  var valid = {};
+  definitions.forEach(function (tab) { valid[tab.value] = true; });
+  var out = [];
+  parts.forEach(function (part) {
+    part = String(part || "").trim();
+    if (valid[part] && out.indexOf(part) < 0) out.push(part);
+  });
+  return out.length ? out : ["power"];
+}
+
+function lightControlTabs(b) {
+  return normalizeLightControlTabs(configOptionValue(b && b.options, LIGHT_CONTROL_TABS_OPTION));
+}
+
+function lightControlTabsAreDefault(tabs) {
+  tabs = normalizeLightControlTabs((tabs || []).join("|"));
+  var defaults = lightControlDefaultTabs();
+  if (tabs.length !== defaults.length) return false;
+  for (var i = 0; i < defaults.length; i++) {
+    if (tabs[i] !== defaults[i]) return false;
+  }
+  return true;
+}
+
+function normalizeLightControlOptions(options) {
+  var tabs = normalizeLightControlTabs(configOptionValue(options, LIGHT_CONTROL_TABS_OPTION));
+  return lightControlTabsAreDefault(tabs)
+    ? ""
+    : setConfigOptionValue("", LIGHT_CONTROL_TABS_OPTION, tabs.join("|"));
+}
+
+function setLightControlTabs(b, tabs) {
+  if (!b) return "";
+  tabs = normalizeLightControlTabs((tabs || []).join("|"));
+  b.options = lightControlTabsAreDefault(tabs)
+    ? setConfigOptionValue(b.options, LIGHT_CONTROL_TABS_OPTION, "")
+    : setConfigOptionValue(b.options, LIGHT_CONTROL_TABS_OPTION, tabs.join("|"));
+  b.options = normalizeLightControlOptions(b.options);
+  return b.options;
+}
+
+function coverControlTabDefinitions() {
+  return [
+    { value: "position", label: "Position" },
+    { value: "controls", label: "Controls" },
+    { value: "tilt", label: "Tilt" },
+  ];
+}
+
+function coverControlDefaultTabs() {
+  return coverControlTabDefinitions().map(function (tab) { return tab.value; });
+}
+
+function normalizeTabList(value, definitions, defaults, fallback) {
+  var raw = String(value || "").trim();
+  var parts = raw ? raw.split("|") : defaults;
+  var valid = {};
+  definitions.forEach(function (tab) { valid[tab.value] = true; });
+  var out = [];
+  parts.forEach(function (part) {
+    part = String(part || "").trim();
+    if (valid[part] && out.indexOf(part) < 0) out.push(part);
+  });
+  return out.length ? out : [fallback];
+}
+
+function tabListIsDefault(tabs, defaults) {
+  tabs = tabs || [];
+  if (tabs.length !== defaults.length) return false;
+  for (var i = 0; i < defaults.length; i++) {
+    if (tabs[i] !== defaults[i]) return false;
+  }
+  return true;
+}
+
+function normalizeCoverControlTabs(value) {
+  return normalizeTabList(
+    value,
+    coverControlTabDefinitions(),
+    coverControlDefaultTabs(),
+    "position"
+  );
+}
+
+function coverControlTabs(b) {
+  return normalizeCoverControlTabs(configOptionValue(b && b.options, COVER_CONTROL_TABS_OPTION));
+}
+
+function coverControlTabsAreDefault(tabs) {
+  return tabListIsDefault(
+    normalizeCoverControlTabs((tabs || []).join("|")),
+    coverControlDefaultTabs()
+  );
+}
+
+function normalizeCoverOptions(options) {
+  var tabs = normalizeCoverControlTabs(configOptionValue(options, COVER_CONTROL_TABS_OPTION));
+  return coverControlTabsAreDefault(tabs)
+    ? ""
+    : setConfigOptionValue("", COVER_CONTROL_TABS_OPTION, tabs.join("|"));
+}
+
+function normalizeCoverOptionsForMode(options, mode) {
+  return normalizeCoverMode(mode, true) === "modal" ? normalizeCoverOptions(options) : "";
+}
+
+function setCoverControlTabs(b, tabs) {
+  if (!b) return "";
+  tabs = normalizeCoverControlTabs((tabs || []).join("|"));
+  b.options = coverControlTabsAreDefault(tabs)
+    ? setConfigOptionValue(b.options, COVER_CONTROL_TABS_OPTION, "")
+    : setConfigOptionValue(b.options, COVER_CONTROL_TABS_OPTION, tabs.join("|"));
+  b.options = normalizeCoverOptions(b.options);
+  return b.options;
+}
+
+function renderModalTabSettings(panel, b, helpers, config) {
+  var section = document.createElement("div");
+  panel.appendChild(section);
+
+  b.options = config.normalizeOptions(b.options);
+  var tabs = config.tabs(b);
+  var definitions = config.definitions();
+  var definitionByValue = {};
+  definitions.forEach(function (definition) {
+    definitionByValue[definition.value] = definition;
+  });
+  var orderedDefinitions = [];
+  tabs.forEach(function (tab) {
+    if (definitionByValue[tab]) orderedDefinitions.push(definitionByValue[tab]);
+  });
+  definitions.forEach(function (definition) {
+    if (tabs.indexOf(definition.value) < 0) orderedDefinitions.push(definition);
+  });
+
+  var heading = document.createElement("div");
+  heading.className = "sp-field";
+  heading.appendChild(helpers.fieldLabel("Modal Tabs"));
+  section.appendChild(heading);
+
+  var list = document.createElement("div");
+  list.className = "sp-light-tab-list";
+  section.appendChild(list);
+
+  function listRows() {
+    return Array.prototype.slice.call(list.querySelectorAll(".sp-light-tab-row"));
+  }
+
+  function saveTabsFromRows() {
+    var nextTabs = [];
+    listRows().forEach(function (row) {
+      var input = row.querySelector("input[type=checkbox]");
+      if (input && input.checked) nextTabs.push(row.getAttribute("data-tab"));
+    });
+    if (!nextTabs.length) return false;
+    saveTabs(nextTabs);
+    return true;
+  }
+
+  function saveTabs(nextTabs) {
+    config.setTabs(b, nextTabs);
+    helpers.saveField("options", b.options);
+    renderButtonSettings();
+  }
+
+  function updateMoveButtons() {
+    var rows = listRows();
+    rows.forEach(function (row, index) {
+      var down = row.querySelector(".sp-light-tab-move-down");
+      if (down) down.disabled = index === rows.length - 1;
+    });
+  }
+
+  function moveRow(row, direction) {
+    if (!row) return;
+    if (direction < 0 && row.previousElementSibling) {
+      list.insertBefore(row, row.previousElementSibling);
+      saveTabsFromRows();
+    } else if (direction > 0 && row.nextElementSibling) {
+      list.insertBefore(row.nextElementSibling, row);
+      saveTabsFromRows();
+    }
+  }
+
+  orderedDefinitions.forEach(function (definition) {
+    var tabIndex = tabs.indexOf(definition.value);
+    var visible = tabIndex >= 0;
+
+    var row = document.createElement("div");
+    row.className = "sp-light-tab-row";
+    row.setAttribute("data-tab", definition.value);
+    row.draggable = true;
+
+    var controls = document.createElement("div");
+    controls.className = "sp-light-tab-controls";
+
+    var drag = document.createElement("button");
+    drag.type = "button";
+    drag.className = "sp-light-tab-drag mdi mdi-drag";
+    drag.setAttribute("aria-label", "Drag " + definition.label);
+    drag.tabIndex = -1;
+
+    var downBtn = document.createElement("button");
+    downBtn.type = "button";
+    downBtn.className = "sp-light-tab-move sp-light-tab-move-down mdi mdi-chevron-down";
+    downBtn.setAttribute("aria-label", "Move " + definition.label + " down");
+    downBtn.addEventListener("click", function () {
+      moveRow(row, 1);
+    });
+
+    controls.appendChild(drag);
+    controls.appendChild(downBtn);
+    row.appendChild(controls);
+
+    var label = document.createElement("label");
+    label.className = "sp-light-tab-label";
+    label.htmlFor = helpers.idPrefix + config.idPrefix + definition.value;
+    label.textContent = definition.label;
+    row.appendChild(label);
+
+    var toggle = document.createElement("label");
+    toggle.className = "sp-toggle";
+    var input = document.createElement("input");
+    input.type = "checkbox";
+    input.id = helpers.idPrefix + config.idPrefix + definition.value;
+    input.checked = visible;
+    var track = document.createElement("span");
+    track.className = "sp-toggle-track";
+    toggle.appendChild(input);
+    toggle.appendChild(track);
+    row.appendChild(toggle);
+
+    input.addEventListener("change", function () {
+      if (!this.checked) {
+        var visibleCount = listRows().filter(function (item) {
+          var itemInput = item.querySelector("input[type=checkbox]");
+          return itemInput && itemInput.checked;
+        }).length;
+        if (visibleCount < 1) {
+          this.checked = true;
+          return;
+        }
+      }
+      saveTabsFromRows();
+    });
+
+    row.addEventListener("dragstart", function (event) {
+      row.classList.add("sp-dragging");
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", definition.value);
+    });
+    row.addEventListener("dragend", function () {
+      row.classList.remove("sp-dragging");
+    });
+    row.addEventListener("dragover", function (event) {
+      var dragging = list.querySelector(".sp-dragging");
+      if (!dragging || dragging === row) return;
+      event.preventDefault();
+      var rect = row.getBoundingClientRect();
+      var after = event.clientY > rect.top + rect.height / 2;
+      list.insertBefore(dragging, after ? row.nextSibling : row);
+    });
+    row.addEventListener("drop", function (event) {
+      event.preventDefault();
+      saveTabsFromRows();
+    });
+
+    list.appendChild(row);
+  });
+
+  updateMoveButtons();
+  return section;
+}
+
 function normalizeSubpageKind(value) {
   value = String(value || "").trim();
-  return value === "lights" || value === "media" ||
-    value === "climate" || value === "presence" ? value : "";
+  return subpagePresetDefaults(value) ? value : "";
 }
 
 function subpageKind(b) {
   return normalizeSubpageKind(configOptionValue(b && b.options, SUBPAGE_KIND_OPTION));
 }
 
+var SUBPAGE_KIND_PRESET_DEFINITIONS = [
+  { value: "", label: "Generic" },
+  { value: "switch", label: "Switch", preset: { label: "Switch", icon: "Power Plug", entityDomains: ["light", "switch", "input_boolean", "fan"], placeholder: "e.g. switch.living_room" } },
+  { value: "lights", label: "Lights", preset: { label: "Lighting", icon: "Lightbulb", entityDomains: ["light"], placeholder: "e.g. light.living_room" } },
+  { value: "climate", label: "Climate", preset: { label: "Climate", icon: "Thermostat", entityDomains: ["climate"], placeholder: "e.g. climate.living_room" } },
+  { value: "presence", label: "Presence", preset: { label: "Presence", icon: "Account", entityDomains: ["person", "device_tracker", "binary_sensor", "input_boolean"], placeholder: "e.g. person.jane" } },
+  { value: "media", label: "Media", preset: { label: "Media", icon: "Speaker", entityDomains: ["media_player"], placeholder: "e.g. media_player.living_room" } },
+  { value: "alarm", label: "Alarm", preset: { label: "Alarm", icon: "Security", entityDomains: ["alarm_control_panel"], placeholder: "e.g. alarm_control_panel.home" } },
+  { value: "cover", label: "Cover", preset: { label: "Cover", icon: "Blinds", entityDomains: ["cover"], placeholder: "e.g. cover.office_blind" } },
+  { value: "garage", label: "Garage Door", preset: { label: "Garage", icon: "Garage", entityDomains: ["cover"], placeholder: "e.g. cover.garage_door" } },
+  { value: "lock", label: "Lock", preset: { label: "Lock", icon: "Lock", entityDomains: ["lock"], placeholder: "e.g. lock.front_door" } },
+  { value: "vacuum", label: "Vacuum", preset: { label: "Vacuum", icon: "Robot Vacuum", entityDomains: ["vacuum"], placeholder: "e.g. vacuum.downstairs" } },
+  { value: "lawn_mower", label: "Lawn Mower", preset: { label: "Lawn Mower", icon: "Robot Mower", entityDomains: ["lawn_mower"], placeholder: "e.g. lawn_mower.backyard" } },
+  { value: "weather", label: "Weather", preset: { label: "Weather", icon: "Weather Partly Cloudy", entityDomains: ["weather"], placeholder: "e.g. weather.home" } },
+  { value: "sensor", label: "Sensor", preset: { label: "Sensor", icon: "Gauge", entityDomains: ["sensor", "binary_sensor", "text_sensor"], placeholder: "e.g. sensor.open_windows" } },
+  { value: "image", label: "Camera/Image", preset: { label: "Camera", icon: "Camera", entityDomains: ["camera", "image"], placeholder: "e.g. camera.front_door" } },
+];
+
+function subpageKindOptions() {
+  return SUBPAGE_KIND_PRESET_DEFINITIONS.map(function (definition) {
+    return [definition.value, definition.label];
+  });
+}
+
 function subpagePresetDefaults(kind) {
-  kind = normalizeSubpageKind(kind);
-  if (kind === "lights") {
-    return { label: "Lighting", icon: "Lightbulb", entityDomain: "light" };
-  }
-  if (kind === "media") {
-    return { label: "Media", icon: "Speaker", entityDomain: "media_player" };
-  }
-  if (kind === "climate") {
-    return { label: "Climate", icon: "Thermostat", entityDomain: "climate" };
-  }
-  if (kind === "presence") {
-    return { label: "Presence", icon: "Account", entityDomain: "person" };
+  kind = String(kind || "").trim();
+  for (var i = 0; i < SUBPAGE_KIND_PRESET_DEFINITIONS.length; i++) {
+    var definition = SUBPAGE_KIND_PRESET_DEFINITIONS[i];
+    if (definition.value === kind) return definition.preset || null;
   }
   return null;
 }
@@ -341,8 +969,8 @@ function normalizeSubpageOptions(options, sensor, precision) {
   var kind = normalizeSubpageKind(configOptionValue(options, SUBPAGE_KIND_OPTION));
   if (kind) out = setConfigOptionValue(out, SUBPAGE_KIND_OPTION, kind);
   if (sensor && sensor !== "indicator" && precision !== "text" &&
-      configOptionEnabled(options, SENSOR_LARGE_NUMBERS_OPTION)) {
-    out = setConfigOption(out, SENSOR_LARGE_NUMBERS_OPTION, true);
+      (configOptionEnabled(options, SENSOR_LARGE_NUMBERS_OPTION) || largeNumbersExplicitlyDisabled(options))) {
+    out = copyLargeNumbersOption(out, options);
   }
   return out;
 }
@@ -438,7 +1066,13 @@ function sensorLargeNumbersEnabled(b) {
 
 function setSensorLargeNumbersEnabled(b, enabled) {
   if (!b) return "";
-  b.options = setConfigOption(b.options, SENSOR_LARGE_NUMBERS_OPTION, enabled);
+  b.options = setConfigOption(b.options, SENSOR_LARGE_NUMBERS_OPTION, false);
+  b.options = setConfigOptionValue(
+    b.options,
+    SENSOR_LARGE_NUMBERS_OPTION,
+    enabled ? "" : SENSOR_LARGE_NUMBERS_OFF_VALUE
+  );
+  if (enabled) b.options = setConfigOption(b.options, SENSOR_LARGE_NUMBERS_OPTION, true);
   return b.options;
 }
 
@@ -520,7 +1154,10 @@ function normalizeSensorOptions(options, precision) {
   var out = "";
   if (configOptionEnabled(options, SENSOR_LARGE_NUMBERS_OPTION) &&
       cardContractOptionSupportedFor("sensor", SENSOR_LARGE_NUMBERS_OPTION, { precision: precision })) {
-    out = setConfigOption(out, SENSOR_LARGE_NUMBERS_OPTION, true);
+    out = copyLargeNumbersOption(out, options);
+  } else if (largeNumbersExplicitlyDisabled(options) &&
+      cardContractOptionSupportedFor("sensor", SENSOR_LARGE_NUMBERS_OPTION, { precision: precision })) {
+    out = copyLargeNumbersOption(out, options);
   }
   if (configOptionEnabled(options, SENSOR_ACTIVE_COLOR_OPTION) &&
       cardContractOptionSupportedFor("sensor", SENSOR_ACTIVE_COLOR_OPTION, { precision: precision })) {
@@ -631,9 +1268,7 @@ function switchConfirmationNoText(b) {
 function normalizeSwitchConfirmationOptions(options) {
   var mode = switchConfirmationMode({ options: options });
   var out = "";
-  if (configOptionEnabled(options, SENSOR_LARGE_NUMBERS_OPTION)) {
-    out = setConfigOption(out, SENSOR_LARGE_NUMBERS_OPTION, true);
-  }
+  out = copyLargeNumbersOption(out, options);
   var onPattern = normalizeCardOnPattern(configOptionValue(options, CARD_ON_PATTERN_OPTION));
   if (onPattern) out = setConfigOptionValue(out, CARD_ON_PATTERN_OPTION, onPattern);
   if (!mode) return out;
@@ -660,9 +1295,7 @@ function setSwitchConfirmationOptions(b, mode, message, yesText, noText) {
   mode = mode === true ? "off" : mode;
   mode = mode === "on" || mode === "both" || mode === "off" ? mode : "";
   var out = "";
-  if (configOptionEnabled(b.options, SENSOR_LARGE_NUMBERS_OPTION)) {
-    out = setConfigOption(out, SENSOR_LARGE_NUMBERS_OPTION, true);
-  }
+  out = copyLargeNumbersOption(out, b.options);
   var storage = switchConfirmationModeStorage();
   out = setConfigOption(out, storage[0], mode === "off" || mode === "both");
   out = setConfigOption(out, storage[1], mode === "on" || mode === "both");
@@ -681,6 +1314,99 @@ function setSwitchConfirmationOptions(b, mode, message, yesText, noText) {
   return b.options;
 }
 
+function actionCardIsScript(b) {
+  var value = typeof b === "string" ? b : b && b.sensor;
+  return value === "script.turn_on";
+}
+
+function actionScriptConfirmationEnabled(b) {
+  return !!(b && actionCardIsScript(b) &&
+    configOptionEnabled(b.options, SWITCH_CONFIRM_ON_OPTION));
+}
+
+function actionScriptConfirmationDefaultMessage() {
+  return cardContractOptionDefaultValue("action", SWITCH_CONFIRM_MESSAGE_OPTION,
+    ACTION_SCRIPT_CONFIRM_DEFAULT_MESSAGE);
+}
+
+function actionScriptConfirmationMessage(b) {
+  return configOptionValue(b && b.options, SWITCH_CONFIRM_MESSAGE_OPTION) ||
+    actionScriptConfirmationDefaultMessage();
+}
+
+function actionScriptConfirmationYesText(b) {
+  return configOptionValue(b && b.options, SWITCH_CONFIRM_YES_OPTION) ||
+    cardContractOptionDefaultValue("action", SWITCH_CONFIRM_YES_OPTION, SWITCH_CONFIRM_DEFAULT_YES);
+}
+
+function actionScriptConfirmationNoText(b) {
+  return configOptionValue(b && b.options, SWITCH_CONFIRM_NO_OPTION) ||
+    cardContractOptionDefaultValue("action", SWITCH_CONFIRM_NO_OPTION, SWITCH_CONFIRM_DEFAULT_NO);
+}
+
+function copyActionCardStateOptions(out, options) {
+  var stateEntity = configOptionValue(options, ACTION_CARD_STATE_ENTITY_OPTION);
+  if (!stateEntity) return out;
+  out = setConfigOptionValue(out, ACTION_CARD_STATE_ENTITY_OPTION, stateEntity);
+  var rawPrecision = configOptionValue(options, ACTION_CARD_STATE_PRECISION_OPTION);
+  if (rawPrecision === "icon" || rawPrecision === "text") {
+    out = setConfigOptionValue(out, ACTION_CARD_STATE_PRECISION_OPTION, rawPrecision);
+    return out;
+  }
+  var stateUnit = configOptionValue(options, ACTION_CARD_STATE_UNIT_OPTION);
+  if (!stateUnit && rawPrecision !== "0" && rawPrecision !== "1" && rawPrecision !== "2") {
+    return out;
+  }
+  var statePrecision = rawPrecision === "1" || rawPrecision === "2" ? rawPrecision : "0";
+  if (stateUnit) out = setConfigOptionValue(out, ACTION_CARD_STATE_UNIT_OPTION, stateUnit);
+  if (rawPrecision === "0" || statePrecision !== "0") {
+    out = setConfigOptionValue(out, ACTION_CARD_STATE_PRECISION_OPTION, statePrecision);
+  }
+  out = copyLargeNumbersOption(out, options);
+  return out;
+}
+
+function normalizeActionOptions(options, action) {
+  if (action === ACTION_CARD_LOCAL_ACTION) return "";
+  var out = copyActionCardStateOptions("", options);
+  if (action !== "script.turn_on" || !configOptionEnabled(options, SWITCH_CONFIRM_ON_OPTION)) {
+    return out;
+  }
+  out = setConfigOption(out, SWITCH_CONFIRM_ON_OPTION, true);
+  var msg = configOptionValue(options, SWITCH_CONFIRM_MESSAGE_OPTION);
+  var yes = configOptionValue(options, SWITCH_CONFIRM_YES_OPTION);
+  var no = configOptionValue(options, SWITCH_CONFIRM_NO_OPTION);
+  if (msg && msg !== actionScriptConfirmationDefaultMessage()) {
+    out = setConfigOptionValue(out, SWITCH_CONFIRM_MESSAGE_OPTION, msg);
+  }
+  if (yes && yes !== cardContractOptionDefaultValue("action", SWITCH_CONFIRM_YES_OPTION, SWITCH_CONFIRM_DEFAULT_YES)) {
+    out = setConfigOptionValue(out, SWITCH_CONFIRM_YES_OPTION, yes);
+  }
+  if (no && no !== cardContractOptionDefaultValue("action", SWITCH_CONFIRM_NO_OPTION, SWITCH_CONFIRM_DEFAULT_NO)) {
+    out = setConfigOptionValue(out, SWITCH_CONFIRM_NO_OPTION, no);
+  }
+  return out;
+}
+
+function setActionScriptConfirmationOptions(b, enabled, message, yesText, noText) {
+  if (!b) return "";
+  var out = copyActionCardStateOptions("", b.options);
+  if (enabled && actionCardIsScript(b)) {
+    out = setConfigOption(out, SWITCH_CONFIRM_ON_OPTION, true);
+    if (message && message !== actionScriptConfirmationDefaultMessage()) {
+      out = setConfigOptionValue(out, SWITCH_CONFIRM_MESSAGE_OPTION, message);
+    }
+    if (yesText && yesText !== cardContractOptionDefaultValue("action", SWITCH_CONFIRM_YES_OPTION, SWITCH_CONFIRM_DEFAULT_YES)) {
+      out = setConfigOptionValue(out, SWITCH_CONFIRM_YES_OPTION, yesText);
+    }
+    if (noText && noText !== cardContractOptionDefaultValue("action", SWITCH_CONFIRM_NO_OPTION, SWITCH_CONFIRM_DEFAULT_NO)) {
+      out = setConfigOptionValue(out, SWITCH_CONFIRM_NO_OPTION, noText);
+    }
+  }
+  b.options = out;
+  return b.options;
+}
+
 function normalizeGarageLabelDisplayMode(value) {
   value = String(value || "").trim();
   var spec = cardContractOptionSpec("garage", GARAGE_LABEL_DISPLAY_OPTION);
@@ -691,14 +1417,12 @@ function normalizeGarageLabelDisplayMode(value) {
 function normalizeGarageOptions(options, mode) {
   var labelMode = normalizeGarageLabelDisplayMode(
     configOptionValue(options, GARAGE_LABEL_DISPLAY_OPTION));
-  if (garageCommandMode(mode)) return "";
   return labelMode === "status"
     ? setConfigOptionValue("", GARAGE_LABEL_DISPLAY_OPTION, labelMode)
     : "";
 }
 
 function garageLabelDisplayMode(b) {
-  if (garageCommandMode(b && b.sensor)) return "label";
   return normalizeGarageLabelDisplayMode(
     configOptionValue(b && b.options, GARAGE_LABEL_DISPLAY_OPTION));
 }
@@ -728,11 +1452,20 @@ function normalizeClimateNumberDisplayMode(value) {
   return values.indexOf(value) >= 0 ? value : climateDefaultNumberDisplayMode();
 }
 
+function normalizeClimateTemperatureStep(value) {
+  value = String(value || "").trim();
+  var spec = cardContractOptionSpec("climate", CLIMATE_TEMPERATURE_STEP_OPTION);
+  var values = spec && spec.values ? spec.values : ["1", "0.5"];
+  return values.indexOf(value) >= 0 ? value : climateDefaultTemperatureStep();
+}
+
 function normalizeClimateOptions(options) {
   var labelMode = normalizeClimateLabelDisplayMode(
     configOptionValue(options, CLIMATE_LABEL_DISPLAY_OPTION));
   var numberMode = normalizeClimateNumberDisplayMode(
     configOptionValue(options, CLIMATE_NUMBER_DISPLAY_OPTION));
+  var temperatureStep = normalizeClimateTemperatureStep(
+    configOptionValue(options, CLIMATE_TEMPERATURE_STEP_OPTION));
   var out = "";
   if (labelMode !== climateDefaultLabelDisplayMode()) {
     out = setConfigOptionValue(out, CLIMATE_LABEL_DISPLAY_OPTION, labelMode);
@@ -740,8 +1473,11 @@ function normalizeClimateOptions(options) {
   if (numberMode !== climateDefaultNumberDisplayMode()) {
     out = setConfigOptionValue(out, CLIMATE_NUMBER_DISPLAY_OPTION, numberMode);
   }
-  if (numberMode !== "icon" && configOptionEnabled(options, SENSOR_LARGE_NUMBERS_OPTION)) {
-    out = setConfigOption(out, SENSOR_LARGE_NUMBERS_OPTION, true);
+  if (temperatureStep !== climateDefaultTemperatureStep()) {
+    out = setConfigOptionValue(out, CLIMATE_TEMPERATURE_STEP_OPTION, temperatureStep);
+  }
+  if (numberMode !== "icon") {
+    out = copyLargeNumbersOption(out, options);
   }
   return out;
 }
@@ -775,6 +1511,23 @@ function setClimateNumberDisplayMode(b, mode) {
     b.options,
     CLIMATE_NUMBER_DISPLAY_OPTION,
     normalized === climateDefaultNumberDisplayMode() ? "" : normalized
+  );
+  b.options = normalizeClimateOptions(b.options);
+  return b.options;
+}
+
+function climateTemperatureStep(b) {
+  return normalizeClimateTemperatureStep(
+    configOptionValue(b && b.options, CLIMATE_TEMPERATURE_STEP_OPTION));
+}
+
+function setClimateTemperatureStep(b, step) {
+  if (!b) return "";
+  var normalized = normalizeClimateTemperatureStep(step);
+  b.options = setConfigOptionValue(
+    b.options,
+    CLIMATE_TEMPERATURE_STEP_OPTION,
+    normalized === climateDefaultTemperatureStep() ? "" : normalized
   );
   b.options = normalizeClimateOptions(b.options);
   return b.options;
@@ -814,6 +1567,7 @@ function normalizeAlarmActionList(value) {
     var action = parts[i];
     if (!alarmActionInfo(action) || out.indexOf(action) >= 0) continue;
     out.push(action);
+    if (out.length >= ALARM_MAX_VISIBLE_ACTIONS) break;
   }
   return out.length ? out : alarmDefaultActions();
 }
@@ -970,6 +1724,12 @@ function climateDefaultNumberDisplayMode() {
   return cardContractOptionDefaultValue("climate", CLIMATE_NUMBER_DISPLAY_OPTION, fallback);
 }
 
+function climateDefaultTemperatureStep() {
+  var behavior = climateBehaviorSpec();
+  var fallback = behavior && behavior.defaultTemperatureStep || "1";
+  return cardContractOptionDefaultValue("climate", CLIMATE_TEMPERATURE_STEP_OPTION, fallback);
+}
+
 function normalizeClimatePrecisionConfig(value) {
   var parsed = parseClimatePrecisionConfig(value);
   return climatePrecisionConfig(parsed.precision, parsed.min, parsed.max);
@@ -993,24 +1753,59 @@ function buttonConfigFields(b) {
   }
   var isActionOptionSelect = !!(b && (actionCardIsOptionSelect(b) || isOptionSelectType(type)));
   if (isActionOptionSelect) type = "action";
+  if (type === "local") type = "action";
+  if (type === "local_sensor") type = "sensor";
+  var label = b && b.label || "";
+  if (type === "screen_lock") label = "";
   var sensor = isActionOptionSelect ? ACTION_CARD_OPTION_SELECT_ACTION :
-    (isBrightnessSliderType(type) || type === "climate" || type === "light_switch" || type === "alarm" || isFanCardType(type)) ? "" : (b && b.sensor || "");
-  var unit = (isActionOptionSelect || type === "climate" || type === "light_switch" || type === "alarm" || type === "alarm_action" || isFanCardType(type)) ? "" : (b && b.unit || "");
+    (isBrightnessSliderType(type) || type === "climate" || type === "light_switch" || type === "light_control" || type === "alarm" || type === "screen_lock" || isFanCardType(type)) ? "" : (b && b.sensor || "");
+  if (b && b.type === "local") sensor = ACTION_CARD_LOCAL_ACTION;
+  if (b && (b.type === "local_sensor" || sensorCardIsLocal(b))) sensor = SENSOR_CARD_LOCAL_SENSOR;
+  var isLocalAction = type === "action" && sensor === ACTION_CARD_LOCAL_ACTION;
+  var unit = (isActionOptionSelect || type === "climate" || type === "light_switch" || type === "light_control" || type === "alarm" || type === "alarm_action" || type === "screen_lock" || isFanCardType(type)) ? "" : (b && b.unit || "");
+  if (isLocalAction) unit = "";
   var icon = b && b.icon || "Auto";
   if (isActionOptionSelect && (!icon || icon === "Auto" || icon === "Chevron Down")) icon = "Flash";
+  if (isLocalAction && (!icon || icon === "Auto" || icon === "Flash")) icon = "Gesture Tap";
   if (type === "alarm" && (!icon || icon === "Auto")) icon = "Security";
+  if (type === "screen_lock") icon = "Lock";
   if (type === "alarm_action" && (!icon || icon === "Auto")) icon = (alarmActionInfo(sensor) || alarmActionSpecs()[0]).icon;
   if (isFanCardType(type) && (!icon || icon === "Auto")) icon = fanCardDefaultIcon(type);
   var iconOn = (isActionOptionSelect || type === "alarm" || type === "alarm_action" || (isFanCardType(type) && type !== "fan_switch")) ? "Auto" : (b && b.icon_on || "Auto");
+  if (isLocalAction) iconOn = "Auto";
   if (type === "fan_switch" && (!iconOn || iconOn === "Auto")) iconOn = "Fan";
-  var precision = (isActionOptionSelect || type === "light_switch" || type === "alarm" || type === "alarm_action" || isFanCardType(type)) ? "" : (b && b.precision || "");
+  if (type === "screen_lock") iconOn = "Lock Open";
+  var precision = (isActionOptionSelect || type === "light_switch" || type === "light_control" || type === "alarm" || type === "alarm_action" || type === "screen_lock" || isFanCardType(type)) ? "" : (b && b.precision || "");
+  if (isLocalAction) precision = "";
+  if (sensor === SENSOR_CARD_LOCAL_SENSOR && precision !== "text" && precision !== "1" && precision !== "2") precision = "";
   if (type === "media") {
     sensor = mediaEditorMode(sensor);
     precision = sensor === "now_playing"
       ? mediaNowPlayingControls({ sensor: sensor, precision: precision })
       : (mediaStateDisplayModeSupported(sensor) && precision === "state" ? "state" : "");
   }
+  if (type === "vacuum") {
+    sensor = normalizeVacuumMode(sensor);
+    unit = vacuumModeNeedsArea(sensor) ? unit : "";
+    precision = "";
+    iconOn = "Auto";
+    if (!icon || icon === "Auto") icon = vacuumModeDefaultIcon(sensor);
+  }
+  if (type === "lawn_mower") {
+    sensor = normalizeLawnMowerMode(sensor);
+    unit = "";
+    precision = "";
+    iconOn = "Auto";
+    if (!icon || icon === "Auto") icon = lawnMowerModeDefaultIcon(sensor);
+  }
   if (type === "climate") precision = normalizeClimatePrecisionConfig(precision);
+  if (type === "image") {
+    iconOn = "Auto";
+    sensor = "";
+    unit = "";
+    precision = "";
+    if (!imageLabelEnabled(b)) label = "";
+  }
   if (type === "door_window") precision = normalizeDoorWindowSubtype(precision);
   var options = b && b.options || "";
   if (type === "") {
@@ -1019,6 +1814,9 @@ function buttonConfigFields(b) {
     options = normalizeAlarmOptions(options);
   } else if (type === "garage") {
     options = normalizeGarageOptions(options, sensor);
+  } else if (type === "cover") {
+    sensor = normalizeCoverMode(sensor, true);
+    options = normalizeCoverOptionsForMode(options, sensor);
   } else if (type === "climate") {
     options = normalizeClimateOptions(options);
   } else if (type === "media") {
@@ -1033,16 +1831,31 @@ function buttonConfigFields(b) {
     iconOn = webhookButton.icon_on || "Auto";
     precision = webhookButton.precision || "";
     options = webhookButton.options || "";
+  } else if (type === "screen_lock") {
+    options = "";
+  } else if (type === "vacuum" || type === "lawn_mower") {
+    options = "";
   } else if (type === "sensor") {
-    options = normalizeSensorOptions(options, precision);
+    options = sensor === SENSOR_CARD_LOCAL_SENSOR ? "" : normalizeSensorOptions(options, precision);
   } else if (type === "door_window") {
     options = normalizeDoorWindowOptions(options);
   } else if (type === "presence") {
     options = normalizePresenceOptions(options);
+  } else if (type === "image") {
+    options = normalizeImageOptions(options);
+  } else if (type === "light_control") {
+    options = normalizeLightControlOptions(options);
+  } else if (type === "action") {
+    options = sensor === ACTION_CARD_LOCAL_ACTION ? "" : normalizeActionOptions(options, sensor);
   } else if (isActionOptionSelect || isFanCardType(type)) {
     options = "";
-  } else if (type !== "action" && type !== "alarm_action" && type !== "garage" && type !== "webhook" && type !== "media" && type !== "presence" && !cardLargeNumbersSupported({ type: type, precision: precision })) {
+  } else if (type !== "action" && type !== "alarm_action" && type !== "cover" && type !== "garage" && type !== "webhook" && type !== "screen_lock" && type !== "media" && type !== "presence" && type !== "light_control" && !cardLargeNumbersSupported({ type: type, precision: precision })) {
     options = "";
+  }
+  if (type === "image") {
+    icon = configOptionEnabled(options, IMAGE_ICON_OPTION)
+      ? (icon && icon !== "Auto" ? icon : "Camera")
+      : "Auto";
   }
   if (type === "door_window") {
     b = b || {};
@@ -1064,8 +1877,8 @@ function buttonConfigFields(b) {
     precision = "";
   }
   return trimConfigFields([
-    (type === "door_window" || type === "presence") ? "" : (b && b.entity || ""),
-    b && b.label || "",
+    (type === "door_window" || type === "presence" || type === "screen_lock") ? "" : (b && b.entity || ""),
+    label,
     icon,
     iconOn,
     sensor,

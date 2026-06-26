@@ -107,7 +107,6 @@ registerButtonType("media", {
   label: function () { return cardContractCardLabel("media"); },
   allowInSubpage: function () { return cardContractAllowInSubpage("media"); },
   pickerKey: function () { return cardContractPickerKey("media"); },
-  experimental: function () { return cardContractExperimental("media"); },
   hidden: function () { return cardContractHidden("media"); },
   hideLabel: true,
   labelPlaceholder: "e.g. Living Room Speaker",
@@ -371,7 +370,7 @@ registerButtonType("media", {
       var progressColor = "444444";
       var positionLabel = b.precision === "state" ? "Paused" : label;
       var positionClass = "sp-sensor-preview sp-media-position-time" +
-        (cardLargeNumbersEnabled(b) ? " sp-sensor-preview-large" : "");
+        (cardLargeNumbersActiveForCardSize(b, helpers, MEDIA_CARD_METADATA) ? " sp-sensor-preview-large" : "");
       return {
         iconHtml:
           '<span class="sp-slider-preview" style="inset:-2px;background:#' + helpers.escHtml(bgColor) + '">' +
