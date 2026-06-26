@@ -116,6 +116,7 @@ ota:
       then:
         - script.execute: show_update_failed
   - platform: http_request
+    id: ota_http_request
     on_begin:
       then:
         - script.execute: show_update_writing
