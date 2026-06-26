@@ -75,7 +75,7 @@ ch422g:
 # -------------------------------------------
 output:
   - platform: gpio
-    id: lcdbacklight_output
+    id: gpio_backlight_pwm
     pin:
       ch422g: ch422g_hub
       number: 2
@@ -85,13 +85,11 @@ output:
 
 light:
   - platform: binary
-    output: lcdbacklight_output
-    id: lcdbacklight
-    name: LCD Backlight
-    icon: mdi:wall-sconce-flat-outline
-    disabled_by_default: true
+    id: display_backlight
+    output: gpio_backlight_pwm
+    name: Display Backlight
+    icon: mdi:lightbulb-on
     restore_mode: ALWAYS_ON
-    internal: false
 
 # -------------------------------------------
 # Touchscreen GT911
@@ -110,6 +108,8 @@ touchscreen:
     ch422g: ch422g_hub
     number: 1
     mode: OUTPUT
+  on_touch:
+    - script.execute: screensaver_wake
 
 # -------------------------------------------
 # Display — RPI DPI RGB 800×480
