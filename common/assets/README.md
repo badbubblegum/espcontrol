@@ -3,6 +3,10 @@
 This directory contains internal firmware assets for icons and glyph sets. It is
 repository documentation for maintainers and is not part of the public docs site.
 
+The Material Design Icons font is committed under `common/assets/fonts/` so
+firmware builds do not depend on downloading it during ESPHome configuration.
+Keep its filename version aligned with `MDI_VERSION` in `scripts/build.py`.
+
 ## Font style names
 
 Device fonts use functional style IDs instead of physical names such as
@@ -118,9 +122,9 @@ This patches the generated icon sections in:
 
 - `common/assets/icon_glyphs.yaml` — LVGL font glyph codepoints
 - `components/espcontrol/icons.h` — C++ icon lookup table and domain defaults
-- `src/webserver/entry.js` — web UI icon picker names and domain defaults
+- `src/webserver/generated/icons.ts` — web UI icon picker names and domain defaults
 
-Run `python3 scripts/build.py` to also rebuild the generated per-device web UI bundles under `docs/public/webserver/.../www.js`.
+Run `python3 scripts/build.py` to also rebuild the shared web UI bundle at `docs/public/webserver/www.js`.
 
 ## 4. Verify
 

@@ -8,6 +8,8 @@ import shlex
 import subprocess
 import sys
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 from unittest import mock
 
@@ -142,14 +144,23 @@ class LocalEsphomeTests(unittest.TestCase):
 
     def test_invokes_esphome_from_yaml_directory(self) -> None:
         path = ROOT / "devices" / "esp32-p4-86" / "dev.yaml"
-        with (
-            mock.patch(__name__ + ".parse_args", return_value=(False, path, "run", [])),
-            mock.patch(__name__ + ".local_version_for", return_value="local-version"),
-            mock.patch(__name__ + ".subprocess.run") as run_mock,
-        ):
+        with mock.patch(__name__ + ".parse_args", return_value=(False, path, "run", [])), \
+            mock.patch(__name__ + ".local_version_for", return_value="local-version"), \
+            mock.patch(__name__ + ".subprocess.run") as run_mock:
             run_mock.return_value.returncode = 0
             self.assertEqual(run(["devices/esp32-p4-86/dev.yaml", "run"]), 0)
             self.assertEqual(run_mock.call_args.kwargs["cwd"], path.parent)
+
+    def test_dry_run_prints_command_without_invoking_esphome(self) -> None:
+        path = ROOT / "devices" / "esp32-p4-86" / "dev.yaml"
+        output = StringIO()
+        with mock.patch(__name__ + ".local_version_for", return_value="local-version"), \
+            mock.patch(__name__ + ".subprocess.run") as run_mock, \
+            redirect_stdout(output):
+            self.assertEqual(run(["--dry-run", str(path), "run", "--device", "192.0.2.10"]), 0)
+            run_mock.assert_not_called()
+        self.assertIn("-s firmware_version local-version run", output.getvalue())
+        self.assertIn("--device 192.0.2.10", output.getvalue())
 
 
 def self_test() -> int:

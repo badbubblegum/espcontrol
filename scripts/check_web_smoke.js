@@ -5,13 +5,14 @@ const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
-const { loadBundledWebSource } = require("./web_source");
+const { freshWebOutputDir, loadBuiltWebSource } = require("./web_source");
 
 const ROOT = path.resolve(__dirname, "..");
-const SOURCE = path.join(ROOT, "src", "webserver", "entry.js");
+const SOURCE = path.join(ROOT, "src", "webserver", "entry.ts");
 const DEVICE_MANIFEST = path.join(ROOT, "devices", "manifest.json");
 const WEB_OUTPUT_DIR = path.join(ROOT, "docs", "public", "webserver");
 const ALL_ROTATIONS = ["0", "90", "180", "270"];
+const REQUIRED_HOOK_GROUPS = ["config", "preview", "backup", "settings"];
 
 function createWebSandbox() {
   const domEvents = [];
@@ -21,6 +22,8 @@ function createWebSandbox() {
     setTimeout,
     clearTimeout,
     requestAnimationFrame(fn) { return setTimeout(fn, 0); },
+    URL,
+    location: { href: "http://espcontrol.test/" },
     document: {
       readyState: "loading",
       activeElement: null,
@@ -38,8 +41,16 @@ function createWebSandbox() {
 function loadHooks() {
   const sandbox = createWebSandbox();
   vm.createContext(sandbox);
-  vm.runInContext(loadBundledWebSource(), sandbox, { filename: SOURCE });
+  vm.runInContext(loadBuiltWebSource(), sandbox, { filename: SOURCE });
+  assertRequiredHookGroups(sandbox.__ESPCONTROL_TEST_HOOKS__.groups);
   return sandbox.__ESPCONTROL_TEST_HOOKS__.config;
+}
+
+function assertRequiredHookGroups(groups, prefix = "web test hooks") {
+  assert(groups, `${prefix} must expose grouped hook registrations`);
+  for (const group of REQUIRED_HOOK_GROUPS) {
+    assert(groups[group], `${prefix} must include the ${group} hook group`);
+  }
 }
 
 function plain(value) {
@@ -53,6 +64,13 @@ function assertGeneratedRotationOptions(slug, generated, key, options) {
   );
 }
 
+function assertGeneratedConfigValue(slug, generated, key, value) {
+  assert(
+    generated.includes(`${key}:${JSON.stringify(value)}`),
+    `${slug}: generated web UI must include ${key} ${JSON.stringify(value)}`
+  );
+}
+
 const hooks = loadHooks();
 assert(hooks, "web test hooks were not exported");
 assert.strictEqual(
@@ -61,45 +79,18 @@ assert.strictEqual(
   "backup export filename includes screen size and date"
 );
 assert.deepStrictEqual(Array.from(hooks.buttonTypesMissingCardMetadata()), [], "all registered card types define card metadata");
-assert.deepStrictEqual(Array.from(hooks.SSE_ALIAS_GROUPS.clockBar), [
-  "switch-screen__clock_bar",
-  "switch-screen_clock_bar",
-  "switch-clock_bar_enabled",
-], "clock bar SSE aliases are registered together");
-assert.deepStrictEqual(Array.from(hooks.SSE_ALIAS_GROUPS.clockBarTime), [
-  "switch-screen__clock_bar_time",
-  "switch-screen_clock_bar_time",
-  "switch-clock_bar_time_enabled",
-], "clock bar time SSE aliases are registered together");
-assert.deepStrictEqual(Array.from(hooks.SSE_ALIAS_GROUPS.voiceServices), [
-  "switch-voice_services",
-  "switch-voice_services_enabled",
-], "voice services SSE aliases are registered together");
-assert.deepStrictEqual(Array.from(hooks.SSE_ALIAS_GROUPS.scheduleWakeTimeout), [
-  "number-screen__schedule_wake_timeout",
-  "number-screen_schedule_wake_timeout",
-  "number-schedule_wake_timeout",
-], "schedule wake timeout SSE aliases are registered together");
-assert.deepStrictEqual(Array.from(hooks.SSE_ALIAS_GROUPS.ntpServer1), [
-  "text-screen__ntp_server_1",
-  "text-ntp_server_1",
-], "NTP server SSE aliases are registered together");
-assert.deepStrictEqual(Array.from(hooks.SSE_ALIAS_GROUPS.coverArtHideExternalInput), [
-  "switch-screen_saver__hide_cover_art_on_external_input",
-  "switch-screen_saver_hide_cover_art_on_external_input",
-  "switch-hide_cover_art_on_external_input",
-  "switch-cover_art_hide_external_input",
-  "switch-screen_saver__hide_for_external_sources",
-], "cover art external-input SSE aliases are registered together");
-assert.deepStrictEqual(Array.from(hooks.SSE_ALIAS_GROUPS.trackOverlayDuration), [
-  "number-screen_saver__track_overlay_duration",
-  "number-screen_saver_track_overlay_duration",
-  "number-track_overlay_duration",
-  "number-screen_saver__show_track_overlay",
-], "cover art track-overlay SSE aliases are registered together");
-assert.deepStrictEqual(Array.from(hooks.SSE_ALIAS_GROUPS.homeAssistantArtworkPort), [
-  "number-home_assistant_artwork_port",
-], "Home Assistant artwork port SSE aliases are registered together");
+assert.deepStrictEqual(
+  plain(hooks.cardSizeMenuOptions({ type: "image" })).slice(-2),
+  [
+    { size: 8, label: "Max wide (3x2)" },
+    { size: 9, label: "Max tall (2x3)" },
+  ],
+  "camera card size menu exposes the two max shapes"
+);
+assert(
+  !plain(hooks.cardSizeMenuOptions({ type: "sensor" })).some((option) => option.size === 8 || option.size === 9),
+  "non-camera card size menus do not expose max shapes"
+);
 assert(
   Array.from(hooks.entityLookupNames("screen_saver_hide_cover_art_external_input")).includes("screen_saver__hide_cover_art_on_external_input"),
   "cover art external-input post aliases include the full generated object id"
@@ -122,6 +113,13 @@ assert.deepStrictEqual(Array.from(hooks.coverArtDelayPostUrls(30)), [
   "/number/cover_art_delay/set?value=30",
   "/number/Screen%20Saver%3A%20Cover%20Art%20Delay/set?value=30",
 ], "cover art delay posts include all firmware object id aliases");
+assert.deepStrictEqual(Array.from(hooks.coverArtDelayPostUrls(0)), [
+  "/number/screen_saver__cover_art_delay/set?value=3",
+  "/number/screen_saver_cover_art_delay/set?value=3",
+  "/number/cover_art_delay/set?value=3",
+  "/number/Screen%20Saver%3A%20Cover%20Art%20Delay/set?value=3",
+], "legacy immediate cover art delay posts as three seconds");
+assert.strictEqual(hooks.normalizeCoverArtDelay(0), 3, "cover art delay UI normalizes legacy immediate values");
 assert(
   Array.from(hooks.entityLookupNames("screen_saver_track_overlay_duration")).includes("screen_saver__show_track_overlay"),
   "cover art track-overlay post aliases include the legacy show-track-overlay object id"
@@ -146,22 +144,6 @@ assert.strictEqual(hooks.clockBarVisibleInPreviewFor(true, "off"), true, "clock 
 assert.strictEqual(hooks.clockBarVisibleInPreviewFor(true, "dim"), true, "clock bar preview stays visible for dimmed screen saver");
 assert.strictEqual(hooks.clockBarVisibleInPreviewFor(true, "clock"), true, "clock bar preview stays visible when clock screen saver is configured");
 assert.strictEqual(hooks.clockBarVisibleInPreviewFor(false, "off"), false, "clock bar preview is hidden when disabled");
-assert.strictEqual(hooks.clockBarStateAfterEvents([
-  { id: "switch-screen__clock_bar", state: "ON", value: true },
-  { id: "switch-clock_bar_enabled", state: "OFF", value: false },
-]), true, "clock bar preview keeps the enabled state when a stale alias reports off later");
-assert.strictEqual(hooks.clockBarStateAfterEvents([
-  { id: "switch-screen__clock_bar", state: "ON", value: true },
-  { id: "switch-screen__clock_bar", state: "OFF", value: false },
-]), false, "clock bar preview still turns off when the same source reports off");
-assert.strictEqual(hooks.removedLegacyStateEvent({
-  id: "text-screen_saver__cover_art_fallback_server",
-  state: "http://old-art-server.local",
-}), true, "cover art fallback server is treated as a removed legacy event");
-assert.strictEqual(hooks.removedLegacyStateEvent({
-  id: "text-screen_saver__cover_art_entity",
-  state: "media_player.living_room",
-}), false, "current cover art entity events are not treated as removed legacy events");
 assert.deepStrictEqual(plain(hooks.firmwareFailureStatusFor("Could not download firmware file (404).")), {
   error: "Firmware update failed: Could not download firmware file (404).",
   updateState: "",
@@ -169,16 +151,40 @@ assert.deepStrictEqual(plain(hooks.firmwareFailureStatusFor("Could not download 
 }, "firmware update failures leave a visible status reason");
 
 const manifest = JSON.parse(fs.readFileSync(DEVICE_MANIFEST, "utf8"));
+const freshOutput = freshWebOutputDir();
+const webOutput = path.join(freshOutput, "www.js");
+const generated = fs.readFileSync(webOutput, "utf8");
+
+const hostedSandbox = createWebSandbox();
+hostedSandbox.document.currentScript = {
+  getAttribute() { return "/webserver/www.js?device=guition-esp32-s3-4848s040"; },
+};
+vm.createContext(hostedSandbox);
+vm.runInContext(generated, hostedSandbox, { filename: webOutput });
+assert.strictEqual(
+  hostedSandbox.__ESPCONTROL_TEST_HOOKS__.config.imageSlotCapacity(),
+  0,
+  "shared hosted bundle selects the device profile from its script URL",
+);
+
 for (const [slug, device] of Object.entries(manifest.devices || {})) {
-  const webOutput = path.join(WEB_OUTPUT_DIR, slug, "www.js");
-  const generated = fs.readFileSync(webOutput, "utf8");
+  assertGeneratedConfigValue(slug, generated, "slots", device.slots);
+  assertGeneratedConfigValue(slug, generated, "cols", device.layout.cols);
+  assertGeneratedConfigValue(slug, generated, "rows", device.layout.rows);
+  assertGeneratedConfigValue(slug, generated, "screenSize", device.public.screenSize);
+  assertGeneratedConfigValue(slug, generated, "slots", device.slots);
+  assertGeneratedConfigValue(slug, generated, "cols", device.layout.cols);
+  assertGeneratedConfigValue(slug, generated, "rows", device.layout.rows);
+  assertGeneratedConfigValue(slug, generated, "screenSize", device.public.screenSize);
   const sandbox = createWebSandbox();
+  sandbox.__ESPCONTROL_DEVICE_PROFILE__ = slug;
   vm.createContext(sandbox);
   vm.runInContext(generated, sandbox, { filename: webOutput });
   assert(
     sandbox.__ESPCONTROL_TEST_HOOKS__.config,
     `${slug}: generated web UI must export the same test hooks used by local checks`
   );
+  assertRequiredHookGroups(sandbox.__ESPCONTROL_TEST_HOOKS__.groups, `${slug}: generated web UI`);
   const generatedHooks = sandbox.__ESPCONTROL_TEST_HOOKS__.config;
   const expectedScreenSize = String(device.public.screenSize)
     .toLowerCase()
@@ -218,6 +224,23 @@ for (const [slug, device] of Object.entries(manifest.devices || {})) {
     Array.from(generatedHooks.timezoneOptionsWithFallback(["UTC (GMT+0)"], "Auto (Home Assistant)", true)).includes("Auto (Home Assistant)"),
     `${slug}: timezone fallback must preserve restored Auto timezone selections`
   );
+  if (((device.web || {}).disabledCardTypes || []).includes("weather_forecast")) {
+    assert.deepStrictEqual(
+      Array.from(generatedHooks.weatherModeOptionValues()),
+      [""],
+      `${slug}: generated web UI must hide weather forecast modes when forecast cards are disabled`
+    );
+    assert.strictEqual(
+      generatedHooks.normalizeWeatherCardMode("today"),
+      "",
+      `${slug}: generated web UI must normalize forecast weather cards back to current conditions`
+    );
+    assert.strictEqual(
+      generatedHooks.weatherCardIsForecastMode({ precision: "today" }),
+      false,
+      `${slug}: generated web UI must not preview disabled weather forecast modes`
+    );
+  }
   assert(
     sandbox.__domEvents.some((event) => event.type === "DOMContentLoaded" && typeof event.listener === "function"),
     `${slug}: generated web UI must register DOMContentLoaded startup wiring`
@@ -226,8 +249,6 @@ for (const [slug, device] of Object.entries(manifest.devices || {})) {
 
 for (const [slug, device] of Object.entries(manifest.devices || {})) {
   if (!device.rotation || !device.rotation.enabled) continue;
-  const webOutput = path.join(WEB_OUTPUT_DIR, slug, "www.js");
-  const generated = fs.readFileSync(webOutput, "utf8");
   const featureConfig = generated.match(/features:\{[^}]*\}/)?.[0] || "";
   assert(
     /features:\{[^}]*screenRotation:!0/.test(generated),
@@ -365,6 +386,73 @@ assert(
   "alarm preview defaults to the status icon"
 );
 assert(
+  !pickerOptions.some((option) => option.key === "media_control"),
+  "media all controls is not shown as a top-level card picker shortcut"
+);
+assert(
+  !pickerOptions.some((option) => option.label === "All Controls"),
+  "all controls subtypes stay out of the top-level card picker"
+);
+assert(
+  Array.from(hooks.mediaModeOptionValues()).includes("control_modal"),
+  "media mode options include the media control modal subtype"
+);
+assert.strictEqual(
+  Array.from(hooks.mediaModeOptionValues())[0],
+  "control_modal",
+  "all media controls appears first in the media mode list"
+);
+const mediaControlIconPreview = hooks.buttonTypePreviewFor("media", {
+  label: "All Controls",
+  icon: "Music",
+  sensor: "control_modal",
+  type: "media",
+});
+assert(
+  mediaControlIconPreview.iconHtml.includes("mdi-music"),
+  "all controls preview uses the selected custom icon"
+);
+const mediaControlConfig = hooks.parseButtonConfig(hooks.serializeButtonConfig({
+  entity: "media_player.living_room",
+  label: "Speaker",
+  icon: "Auto",
+  icon_on: "Auto",
+  sensor: "control_modal",
+  unit: "",
+  type: "media",
+  precision: "",
+  options: "label_display=status,number_display=volume",
+}));
+assert.strictEqual(
+  mediaControlConfig.options,
+  "number_display=volume",
+  "media control parent card display options survive normalization"
+);
+assert.strictEqual(hooks.mediaLabelDisplayMode(mediaControlConfig), "status");
+assert.strictEqual(hooks.mediaNumberDisplayMode(mediaControlConfig), "volume");
+const mediaControlLabelConfig = hooks.parseButtonConfig(hooks.serializeButtonConfig({
+  entity: "media_player.living_room",
+  label: "Speaker",
+  icon: "Auto",
+  icon_on: "Auto",
+  sensor: "control_modal",
+  unit: "",
+  type: "media",
+  precision: "",
+  options: "label_display=label",
+}));
+assert.strictEqual(mediaControlLabelConfig.options, "label_display=label");
+assert.strictEqual(hooks.mediaLabelDisplayMode(mediaControlLabelConfig), "label");
+const mediaControlPreview = hooks.buttonTypePreviewFor("media", mediaControlConfig);
+assert(
+  mediaControlPreview.iconHtml.includes("sp-sensor-preview"),
+  "media control volume display previews as a top-left number"
+);
+assert(
+  mediaControlPreview.labelHtml.includes("Playing"),
+  "media control status label preview uses player state text"
+);
+assert(
   hooks.buttonTypePreviewFor("alarm", { label: "Alarm", icon: "Alarm", type: "alarm", options: "icon_display=static" }).iconHtml.includes("mdi-bell-ring"),
   "alarm preview uses the selected Alarm icon"
 );
@@ -385,6 +473,8 @@ assert.deepStrictEqual(Array.from(hooks.alarmVisibleActions(hooks.parseButtonCon
 ))), ["away", "home", "night"]);
 assert.strictEqual(hooks.buttonTypeVisibleInPickerFor("fan_speed", false), true);
 assert.strictEqual(hooks.buttonTypeVisibleInPickerFor("fan_speed", true), true);
+assert.strictEqual(hooks.buttonTypeVisibleInPickerFor("fan_control", false), false);
+assert.strictEqual(hooks.buttonTypeVisibleInPickerFor("fan_control", true), false);
 assert.strictEqual(hooks.buttonTypeVisibleInPickerFor("fan_switch", false), false);
 assert.strictEqual(hooks.buttonTypeVisibleInPickerFor("fan_oscillate", true), false);
 assert.strictEqual(hooks.buttonTypeVisibleInPickerFor("option_select", false), false);
@@ -696,6 +786,16 @@ const sensorIconPreview = hooks.buttonTypePreviewFor("sensor", {
 assert(sensorIconPreview.iconHtml.includes("mdi-door"), "sensor icon preview uses the selected icon");
 assert(sensorIconPreview.labelHtml.includes("mdi-toggle-switch"), "sensor icon preview uses the icon badge");
 
+const sensorTimePreview = hooks.buttonTypePreviewFor("sensor", {
+  sensor: "sensor.ups_runtime",
+  label: "UPS Runtime",
+  type: "sensor",
+  precision: "time",
+  options: "time_unit=hours,large_numbers",
+}, { cardSize: 4 });
+assert.strictEqual(previewSensorValue(sensorTimePreview), "1h 30m", "sensor Time preview shows compact duration formatting");
+assert(!sensorTimePreview.iconHtml.includes("sp-sensor-preview-large"), "sensor Time preview remains on the normal responsive layout");
+
 const legacyForecastPreview = hooks.buttonTypePreviewFor("weather_forecast", {
   entity: "weather.forecast_home",
   type: "weather_forecast",
@@ -791,6 +891,15 @@ const fanSpeedPreview = hooks.buttonTypePreviewFor("fan_speed", {
 });
 assert(fanSpeedPreview.iconHtml.includes("sp-slider-preview"), "fan speed preview keeps the slider preview");
 assert(fanSpeedPreview.labelHtml.includes("mdi-fan-speed-2"), "fan speed preview uses the speed badge");
+
+const fanControlPreview = hooks.buttonTypePreviewFor("fan_control", {
+  entity: "fan.bedroom",
+  label: "Bedroom Fan",
+  icon: "Fan",
+  type: "fan_control",
+});
+assert(!fanControlPreview.iconHtml.includes("sp-slider-preview"), "fan control preview is not an inline slider");
+assert(fanControlPreview.labelHtml.includes("mdi-fan"), "fan control preview uses the fan badge");
 
 const fanSwitchPreview = hooks.buttonTypePreviewFor("fan_switch", {
   entity: "fan.bedroom",
@@ -890,7 +999,7 @@ const coverModalPreview = hooks.buttonTypePreviewFor("cover", {
   sensor: "modal",
   type: "cover",
 });
-assert(!coverModalPreview.iconHtml.includes("sp-slider-preview"), "cover modal preview uses icon-only layout");
+assert(coverModalPreview.iconHtml.includes("sp-slider-preview"), "cover modal preview shows read-only position track");
 assert(coverModalPreview.iconHtml.includes("mdi-blinds"), "cover modal preview uses the cover icon");
 assert(coverModalPreview.labelHtml.includes("mdi-blinds-horizontal"), "cover modal preview uses the cover badge");
 
@@ -1241,8 +1350,6 @@ assert.deepStrictEqual(
 );
 
 assert.strictEqual(hooks.normalizeScreensaverAction("Screen Dimmed"), "dim");
-assert.strictEqual(hooks.previewHtmlValue({ labelHtml: "" }, "labelHtml", "fallback"), "");
-assert.strictEqual(hooks.previewHtmlValue({}, "labelHtml", "fallback"), "fallback");
 assert.strictEqual(hooks.webserverMockNow().toISOString(), "2026-01-01T09:00:00.000Z");
 assert.notStrictEqual(
   hooks.webserverNow().toISOString(),
@@ -1393,4 +1500,33 @@ assert.strictEqual(
   false
 );
 
-console.log("Web UI smoke tests passed.");
+async function verifyLocalFirmwareProfileSelection() {
+  const productionOutput = freshWebOutputDir({ testHooks: false });
+  const productionBundle = fs.readFileSync(path.join(productionOutput, "www.js"), "utf8");
+  const sandbox = createWebSandbox();
+  const requested = [];
+  sandbox.document.currentScript = null;
+  sandbox.document.querySelector = () => ({ getAttribute() { return "/0.js"; } });
+  sandbox.fetch = (url) => {
+    requested.push(url);
+    return Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ device_slug: "guition-esp32-s3-4848s040" }),
+    });
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(productionBundle, sandbox, { filename: "shared-local-www.js" });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepStrictEqual(requested, ["/espcontrol/version.json"]);
+  assert(
+    sandbox.__domEvents.some((event) => event.type === "DOMContentLoaded"),
+    "shared local bundle starts after resolving the firmware device profile",
+  );
+}
+
+verifyLocalFirmwareProfileSelection()
+  .then(() => console.log("Web UI smoke tests passed."))
+  .catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });

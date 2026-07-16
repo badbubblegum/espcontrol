@@ -5,9 +5,11 @@
 # =============================================================================
 
 substitutions:
+  cover_art_placeholder_file: "../../common/assets/cover_art_placeholder.svg"
   name: "espcontrol-4inch-s3"
   friendly_name: "EspControl 4inch S3"
   espcontrol_component_url: "../.."
+  mdi_font_file: "../../common/assets/fonts/materialdesignicons-webfont-7.4.47.ttf"
   espcontrol_component_ref: "HEAD"
 
 wifi:
@@ -19,4 +21,4 @@ packages:
 
 web_server:
   js_url: ""
-  js_include: "../../docs/public/webserver/guition-esp32-s3-4848s040/www.js"
+  js_include: "../../docs/public/webserver/www.js"

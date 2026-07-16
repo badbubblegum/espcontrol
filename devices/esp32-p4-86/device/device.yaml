@@ -10,6 +10,7 @@
 substitutions:
   espcontrol_component_url: "https://github.com/jtenniswood/espcontrol"
   espcontrol_component_ref: "main"
+  mdi_font_file: "https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/fonts/materialdesignicons-webfont.ttf"
 
 # ---------------------------------------------------------------------------
 # ESP32-P4 platform (32MB flash, ESP-IDF framework)
@@ -35,7 +36,7 @@ esp32:
       disable_vfs_support_dir: false
     sdkconfig_options:
       CONFIG_SDMMC_HOST_DEFAULT: "y"
-      CONFIG_COMPILER_OPTIMIZATION_SIZE: "y"
+      CONFIG_COMPILER_OPTIMIZATION_PERF: "y"
       # HTTPS firmware checks need more stack on ESP32-P4; the default main
       # task stack can trip the stack protector during mbedTLS setup.
       CONFIG_ESP_MAIN_TASK_STACK_SIZE: "8192"
@@ -43,13 +44,27 @@ esp32:
       # Keep the ESP32 task watchdog long enough for display startup while
       # remaining compatible with ESPHome 2026.4 and newer.
       CONFIG_ESP_TASK_WDT_TIMEOUT_S: "30"
-      # ESPHome 2026.5 / ESP-IDF 5.5.2 can make ESP-Hosted preallocate a
-      # large internal DMA buffer pool before ESPHome starts. On P4 display
-      # builds this can fail with "HS_MP: mempool create failed: no mem" and
-      # trigger OTA rollback, so use dynamic buffers and keep hosted task
-      # stacks in PSRAM.
-      CONFIG_ESP_HOSTED_USE_MEMPOOL: "n"
+      # Keep hosted task stacks in PSRAM so the display and audio paths retain
+      # enough internal memory for DMA-capable allocations.
       CONFIG_ESP_HOSTED_DFLT_TASK_FROM_SPIRAM: "y"
+      # The ESP32-C6 hosted WiFi link shares scarce internal/DMA memory with
+      # the full-duplex TDM audio path. Keep network bursts small while testing
+      # dual-mic SE/AEC stability.
+      CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP: "y"
+      CONFIG_WIFI_RMT_STATIC_RX_BUFFER_NUM: "8"
+      CONFIG_WIFI_RMT_DYNAMIC_RX_BUFFER_NUM: "16"
+      CONFIG_WIFI_RMT_DYNAMIC_TX_BUFFER_NUM: "16"
+      CONFIG_WIFI_RMT_AMPDU_RX_ENABLED: "n"
+      CONFIG_WIFI_RMT_AMPDU_TX_ENABLED: "n"
+      CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM: "8"
+      CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM: "16"
+      CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM: "16"
+      CONFIG_ESP_WIFI_AMPDU_RX_ENABLED: "n"
+      CONFIG_ESP_WIFI_AMPDU_TX_ENABLED: "n"
+      CONFIG_LWIP_TCP_SND_BUF_DEFAULT: "16384"
+      CONFIG_LWIP_TCP_WND_DEFAULT: "16384"
+      CONFIG_LWIP_TCP_RECVMBOX_SIZE: "16"
+      CONFIG_LWIP_TCPIP_RECVMBOX_SIZE: "16"
       CONFIG_FREERTOS_THREAD_LOCAL_STORAGE_POINTERS: "1"
       CONFIG_LOG_DEFAULT_LEVEL: "2"
 
@@ -66,6 +81,9 @@ external_components:
     refresh: 1s
 
 espcontrol:
+
+network:
+  enable_high_performance: false
 
 # ---------------------------------------------------------------------------
 # ESPHome core (device name from substitutions)
@@ -194,8 +212,10 @@ light:
             condition:
               lambda: |-
                 auto now = panel_time_or_fallback(id(panel_time).now(), id(homeassistant_time).now());
-                return (id(screen_schedule_asleep) &&
-                        !id(schedule_mode_clock)) ||
+                return (id(display_mode_controller).target_source_is(
+                            espcontrol::DisplayRequestSource::SCREEN_SCHEDULE) &&
+                        id(display_mode_controller).target_mode_is(
+                            espcontrol::DisplayMode::DISPLAY_OFF)) ||
                        screen_schedule_waiting_for_time(
                          id(screen_schedule_trigger).state,
                          id(schedule_enabled).state,
@@ -205,7 +225,9 @@ light:
             else:
               - if:
                   condition:
-                    lambda: 'return id(screensaver_display_off_active);'
+                    lambda: |-
+                      return id(display_mode_controller).current_mode_is(
+                          espcontrol::DisplayMode::DISPLAY_OFF);
                   then:
                     - script.execute: screensaver_wake
     on_turn_off:
@@ -213,10 +235,8 @@ light:
         - if:
             condition:
               lambda: |-
-                return !id(display_asleep) &&
-                       !id(screen_schedule_asleep) &&
-                       !id(screensaver_display_off_active) &&
-                       !id(screensaver_dimmed_active);
+                return id(display_mode_controller).target_mode_is(
+                    espcontrol::DisplayMode::ACTIVE);
             then:
               - script.execute: screen_schedule_manual_sleep
 

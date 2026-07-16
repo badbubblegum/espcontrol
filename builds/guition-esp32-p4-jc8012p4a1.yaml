@@ -7,9 +7,11 @@
 # =============================================================================
 
 substitutions:
+  cover_art_placeholder_file: "../common/assets/cover_art_placeholder.svg"
   name: "espcontrol-jc8012p4a1"
   friendly_name: "EspControl 10inch"
   espcontrol_component_url: "file:///config"
+  mdi_font_file: "/config/common/assets/fonts/materialdesignicons-webfont-7.4.47.ttf"
   espcontrol_component_ref: "HEAD"
 
 esphome:
@@ -26,4 +28,4 @@ captive_portal:
 
 web_server:
   js_url: ""
-  js_include: "../docs/public/webserver/guition-esp32-p4-jc8012p4a1/www.js"
+  js_include: "../docs/public/webserver/www.js"

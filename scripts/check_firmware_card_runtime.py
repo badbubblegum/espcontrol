@@ -15,20 +15,27 @@ CARD_RUNTIME_BOUNDARY_FILES = {
     "button_grid_card_runtime.h",
     "button_grid_contract_generated.h",
 }
+CONTRACT_INCLUDE_ALLOWLIST = {
+    "button_grid_card_runtime.h",
+}
 
 # Existing alarm UI code keeps a few local button-order arrays. The runtime
 # guard still blocks direct generated-contract access in that file.
 MODE_ARRAY_ALLOWLIST = CARD_RUNTIME_BOUNDARY_FILES | {
     "button_grid_alarm.h",
+    # Generated from the same contract and compiled only by the parity test.
+    "button_grid_saved_config_shadow_generated.h",
 }
 
 DIRECT_CONTRACT_PATTERN = re.compile(r"\b(?:card_contract_[A-Za-z0-9_]+|CARD_CONTRACT_[A-Z0-9_]+)\b")
+CONTRACT_INCLUDE_PATTERN = re.compile(r'#\s*include\s+[<"]button_grid_contract_generated\.h[>"]')
 MODE_ARRAY_PATTERN = re.compile(
-    r"\{[^}\n]*\"(?:play_pause|previous|next|volume|position|now_playing|"
+    r"\{[^}\n]*\"(?:play_pause|previous|next|volume|position|now_playing|cover_art|"
     r"open|close|stop|set_position|tilt|toggle|lock|unlock|away|home|night|vacation|disarm)\""
 )
 SERVICE_MAPPING_PATTERN = re.compile(
-    r"\"(?:cover\.(?:open_cover|close_cover|stop_cover|set_cover_position)|"
+    r"\"(?:cover\.(?:open_cover|close_cover|stop_cover|set_cover_position|"
+    r"open_cover_tilt|close_cover_tilt|stop_cover_tilt|set_cover_tilt_position)|"
     r"lock\.(?:lock|unlock)|"
     r"media_player\.(?:media_play_pause|media_previous_track|media_next_track)|"
     r"alarm_control_panel\.(?:alarm_arm_away|alarm_arm_home|alarm_arm_night|alarm_arm_vacation|alarm_disarm))\""
@@ -36,12 +43,20 @@ SERVICE_MAPPING_PATTERN = re.compile(
 
 LAWN_MOWER_HEADER = "button_grid_lawn_mower.h"
 GRID_HEADER = "button_grid_grid.h"
+ACTION_HEADER = "button_grid_actions.h"
+IMAGE_HEADER = "button_grid_image.h"
+STATUS_ENTITY_HEADER = "button_grid_status_entity_driver.h"
+DATE_TIME_HEADER = "button_grid_date_time_driver.h"
+DATE_TIME_CARDS_HEADER = "button_grid_datetime_cards.h"
+SENSOR_HEADER = "button_grid_sensor_driver.h"
+WEATHER_HEADER = "button_grid_weather_driver.h"
+CARDS_HEADER = "button_grid_cards.h"
 
 
 def service_mapping_line_allowed(line: str) -> bool:
     if "ESP_LOGW" in line:
         return True
-    if "cover.set_cover_tilt_position" in line:
+    if "cover." in line and "_tilt" in line:
         return True
     return False
 
@@ -50,12 +65,31 @@ def firmware_headers(root: Path) -> list[Path]:
     return sorted((root / "components" / "espcontrol").glob("button_grid*.h"))
 
 
+def function_body(text: str, name: str) -> str | None:
+    match = re.search(rf"\b{name}\s*\([^)]*\)\s*\{{", text)
+    if not match:
+        return None
+    start = match.end() - 1
+    depth = 0
+    for index in range(start, len(text)):
+        char = text[index]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start + 1:index]
+    return None
+
+
 def check_root(root: Path) -> list[str]:
     failures: list[str] = []
     for path in firmware_headers(root):
         filename = path.name
         rel = path.relative_to(root)
         for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            if filename not in CONTRACT_INCLUDE_ALLOWLIST and CONTRACT_INCLUDE_PATTERN.search(line):
+                failures.append(f"{rel}:{line_no}: include generated card contract through button_grid_card_runtime.h")
             if filename not in CARD_RUNTIME_BOUNDARY_FILES and DIRECT_CONTRACT_PATTERN.search(line):
                 failures.append(f"{rel}:{line_no}: access generated card contract through button_grid_card_runtime.h")
             if filename not in MODE_ARRAY_ALLOWLIST and MODE_ARRAY_PATTERN.search(line):
@@ -92,10 +126,195 @@ def check_root(root: Path) -> list[str]:
     grid_header = root / "components" / "espcontrol" / GRID_HEADER
     if grid_header.exists():
         text = grid_header.read_text(encoding="utf-8")
+        compact_grid = re.sub(r"\s+", " ", text)
+        if (
+            "card_runtime_context(p)" not in text
+            or "card_runtime_information_only(context)" not in text
+            or "espcontrol::cards::Surface::SUBPAGE" not in text
+            or "Legacy setup fallback" not in text
+        ):
+            failures.append(
+                f"components/espcontrol/{GRID_HEADER}: route main and subpage setup through the shared card context"
+            )
+        if (
+            "status_entity_driver_setup_visual( s, p, context, palette)" not in compact_grid
+            or "status_entity_driver_bind_data( s, p, context, palette)" not in compact_grid
+            or "date_time_driver_setup_visual( s, p, context, palette)" not in compact_grid
+            or "date_time_driver_bind_data(s, p, context)" not in compact_grid
+            or "sensor_driver_setup_visual( s, p, context, palette)" not in compact_grid
+            or "sensor_driver_bind_data( s, p, context, palette)" not in compact_grid
+            or "weather_driver_setup_visual( s, p, context, palette, display)" not in compact_grid
+            or "weather_driver_bind_data(s, p, context)" not in compact_grid
+            or "bind_basic_sensor_card(s, p, context, palette)" not in compact_grid
+            or "bind_basic_sensor_card(sub_slot, sb_cfg, context, palette)" not in compact_grid
+        ):
+            failures.append(
+                f"components/espcontrol/{GRID_HEADER}: route main and subpage migrated cards through shared drivers"
+            )
+        for direct_branch in (
+            'p.type == "door_window"', 'p.type == "presence"',
+            'p.type == "clock"', 'p.type == "timezone"',
+            'p.type == "calendar"', 'p.type == "sensor"',
+            'p.type == "local_sensor"', 'p.type == "text_sensor"',
+            'p.type == "weather"', 'p.type == "weather_forecast"',
+            'sb_cfg.type == "calendar"', 'sb_cfg.type == "sensor"',
+            'sb_cfg.type == "local_sensor"', 'sb_cfg.type == "text_sensor"',
+            'sb_cfg.type == "weather"', 'sb_cfg.type == "weather_forecast"',
+        ):
+            if direct_branch in text:
+                failures.append(
+                    f"components/espcontrol/{GRID_HEADER}: keep migrated type overrides inside shared drivers"
+                )
         if 'parent_subpage_kind == "lawn_mower"' not in text or "lawn_mower_state_active_ref" not in text:
             failures.append(
                 f"components/espcontrol/{GRID_HEADER}: route mower subpage parent indicators through mower active-state handling"
             )
+        if (
+            'if (sb_cfg.type == "light_control")' not in text
+            or "subscribe_light_control_state(ctx);\n          add_parent_indicator(sb_cfg.entity);" not in text
+        ):
+            failures.append(
+                f"components/espcontrol/{GRID_HEADER}: include full light controls in generic subpage parent indicators"
+            )
+        image_reset_pos = text.find("reset_image_card_pool(cfg);")
+        subpage_clear_pos = text.find("navigation_clear_subpages();")
+        if image_reset_pos < 0 or subpage_clear_pos < 0 or image_reset_pos > subpage_clear_pos:
+            failures.append(
+                f"components/espcontrol/{GRID_HEADER}: reset image-card contexts before deleting subpage screens"
+            )
+    action_header = root / "components" / "espcontrol" / ACTION_HEADER
+    if action_header.exists():
+        text = action_header.read_text(encoding="utf-8")
+        click_body = function_body(text, "handle_button_click")
+        if click_body is not None and (
+            "card_runtime_context(p)" not in click_body
+            or "card_runtime_passive(context)" not in click_body
+            or "Legacy action fallback" not in click_body
+        ):
+            failures.append(
+                f"components/espcontrol/{ACTION_HEADER}: route passive checks through the shared card context"
+            )
+    image_header = root / "components" / "espcontrol" / IMAGE_HEADER
+    if image_header.exists():
+        text = image_header.read_text(encoding="utf-8")
+        reset_body = function_body(text, "reset_image_card_pool")
+        if reset_body is None or "for (int i = 0; i < IMAGE_CARD_MAX_CONTEXTS; i++)" not in reset_body:
+            failures.append(
+                f"components/espcontrol/{IMAGE_HEADER}: reset every image-card context, including disabled slots"
+            )
+    status_entity_header = root / "components" / "espcontrol" / STATUS_ENTITY_HEADER
+    if status_entity_header.exists():
+        text = status_entity_header.read_text(encoding="utf-8")
+        required = (
+            "status_entity_driver_setup_visual",
+            "status_entity_driver_bind_data",
+            "status_entity_driver_attach_interaction",
+            "status_entity_driver_refresh_layout",
+            "status_entity_driver_cleanup",
+            "case Type::DOOR_WINDOW: return is_entity_on_ref(state);",
+            "case Type::PRESENCE: return presence_detected_ref(state);",
+        )
+        for needle in required:
+            if needle not in text:
+                failures.append(
+                    f"components/espcontrol/{STATUS_ENTITY_HEADER}: missing shared status-entity lifecycle guard {needle}"
+                )
+    elif grid_header.exists():
+        failures.append(
+            f"components/espcontrol/{STATUS_ENTITY_HEADER}: missing shared status-entity driver"
+        )
+    date_time_header = root / "components" / "espcontrol" / DATE_TIME_HEADER
+    if date_time_header.exists():
+        text = date_time_header.read_text(encoding="utf-8")
+        required = (
+            "date_time_driver_setup_visual",
+            "date_time_driver_bind_data",
+            "date_time_driver_attach_interaction",
+            "date_time_driver_refresh_layout",
+            "date_time_driver_cleanup",
+            "context.runtime.type == Type::CALENDAR",
+            "context.runtime.type == Type::CLOCK",
+            "context.runtime.type == Type::TIMEZONE",
+            "register_calendar_card",
+            "subscribe_calendar_date_source",
+            "register_timezone_card",
+        )
+        for needle in required:
+            if needle not in text:
+                failures.append(
+                    f"components/espcontrol/{DATE_TIME_HEADER}: missing shared date-time lifecycle guard {needle}"
+                )
+    elif grid_header.exists():
+        failures.append(
+            f"components/espcontrol/{DATE_TIME_HEADER}: missing shared date-time driver"
+        )
+    date_time_cards_header = root / "components" / "espcontrol" / DATE_TIME_CARDS_HEADER
+    if date_time_cards_header.exists():
+        text = date_time_cards_header.read_text(encoding="utf-8")
+        for legacy_setup in ("setup_calendar_card", "setup_clock_card", "setup_timezone_card"):
+            if legacy_setup in text:
+                failures.append(
+                    f"components/espcontrol/{DATE_TIME_CARDS_HEADER}: keep {legacy_setup} inside the shared date-time driver"
+                )
+    sensor_header = root / "components" / "espcontrol" / SENSOR_HEADER
+    if sensor_header.exists():
+        text = sensor_header.read_text(encoding="utf-8")
+        required = (
+            "sensor_driver_setup_visual",
+            "sensor_driver_bind_data",
+            "sensor_driver_attach_interaction",
+            "sensor_driver_refresh_layout",
+            "sensor_driver_cleanup",
+            "sensor_driver_register_local_value",
+            "subscribe_sensor_text_card_value",
+            "subscribe_sensor_icon_state",
+            "subscribe_time_sensor_value",
+            "subscribe_sensor_value",
+        )
+        for needle in required:
+            if needle not in text:
+                failures.append(
+                    f"components/espcontrol/{SENSOR_HEADER}: missing shared sensor lifecycle guard {needle}"
+                )
+    elif grid_header.exists():
+        failures.append(
+            f"components/espcontrol/{SENSOR_HEADER}: missing shared sensor driver"
+        )
+    weather_header = root / "components" / "espcontrol" / WEATHER_HEADER
+    if weather_header.exists():
+        text = weather_header.read_text(encoding="utf-8")
+        required = (
+            "weather_driver_setup_visual",
+            "weather_driver_bind_data",
+            "weather_driver_attach_interaction",
+            "weather_driver_refresh_layout",
+            "weather_driver_cleanup",
+            "register_weather_forecast_card",
+            "subscribe_weather_state",
+        )
+        for needle in required:
+            if needle not in text:
+                failures.append(
+                    f"components/espcontrol/{WEATHER_HEADER}: missing shared weather lifecycle guard {needle}"
+                )
+    elif grid_header.exists():
+        failures.append(
+            f"components/espcontrol/{WEATHER_HEADER}: missing shared weather driver"
+        )
+    cards_header = root / "components" / "espcontrol" / CARDS_HEADER
+    if cards_header.exists():
+        text = cards_header.read_text(encoding="utf-8")
+        for legacy_setup in (
+            "setup_sensor_card",
+            "setup_text_sensor_card",
+            "setup_local_sensor_card",
+            "setup_weather_card",
+            "setup_weather_forecast_card",
+        ):
+            if legacy_setup in text:
+                failures.append(
+                    f"components/espcontrol/{CARDS_HEADER}: keep {legacy_setup} inside its shared information driver"
+                )
     return failures
 
 
@@ -108,6 +327,10 @@ def run_self_test() -> None:
         (
             {"button_grid_config.h": "return CARD_CONTRACT_MEDIA_DEFAULT_MODE;\n"},
             ("access generated card contract through button_grid_card_runtime.h",),
+        ),
+        (
+            {"button_grid_config.h": '#include "button_grid_contract_generated.h"\n'},
+            ("include generated card contract through button_grid_card_runtime.h",),
         ),
         (
             {"button_grid_cards.h": "static const char *modes[] = {\"open\", \"close\"};\n"},
@@ -123,6 +346,10 @@ def run_self_test() -> None:
         ),
         (
             {"button_grid_card_runtime.h": "return card_contract_media_mode_valid(mode);\n"},
+            (),
+        ),
+        (
+            {"button_grid_card_runtime.h": '#include "button_grid_contract_generated.h"\n'},
             (),
         ),
         (
@@ -142,6 +369,10 @@ def run_self_test() -> None:
             (),
         ),
         (
+            {"button_grid_actions.h": "if (sensor == \"open\") return \"cover.open_cover_tilt\";\n"},
+            (),
+        ),
+        (
             {"button_grid_lawn_mower.h": "return \"lawn_mower.start_mowing\";\n"},
             ("missing mower runtime guard lawn_mower.pause",),
         ),
@@ -152,6 +383,95 @@ def run_self_test() -> None:
         (
             {"button_grid_grid.h": 'if (parent_subpage_kind == "climate") {}\n'},
             ("route mower subpage parent indicators through mower active-state handling",),
+        ),
+        (
+            {
+                "button_grid_grid.h": (
+                    'if (parent_subpage_kind == "lawn_mower") { lawn_mower_state_active_ref(state); }\n'
+                    'if (sb_cfg.type == "light_control") {\n'
+                    '  subscribe_light_control_state(ctx);\n'
+                    '}\n'
+                )
+            },
+            ("include full light controls in generic subpage parent indicators",),
+        ),
+        (
+            {
+                "button_grid_grid.h": (
+                    'if (parent_subpage_kind == "lawn_mower") { lawn_mower_state_active_ref(state); }\n'
+                    'if (sb_cfg.type == "light_control") {\n'
+                    '  subscribe_light_control_state(ctx);\n'
+                    '  add_parent_indicator(sb_cfg.entity);\n'
+                    '}\n'
+                    'navigation_clear_subpages();\n'
+                    'reset_image_card_pool(cfg);\n'
+                )
+            },
+            ("reset image-card contexts before deleting subpage screens",),
+        ),
+        (
+            {"button_grid_image.h": "for (int i = 0; i < count; i++) {}\n"},
+            ("reset every image-card context, including disabled slots",),
+        ),
+        (
+            {
+                "button_grid_status_entity_driver.h": (
+                    "inline bool status_entity_driver_setup_visual() {}\n"
+                    "inline bool status_entity_driver_bind_data() {}\n"
+                )
+            },
+            ("missing shared status-entity lifecycle guard",),
+        ),
+        (
+            {
+                "button_grid_date_time_driver.h": (
+                    "inline bool date_time_driver_setup_visual() {}\n"
+                    "inline bool date_time_driver_bind_data() {}\n"
+                )
+            },
+            ("missing shared date-time lifecycle guard",),
+        ),
+        (
+            {
+                "button_grid_sensor_driver.h": (
+                    "inline bool sensor_driver_setup_visual() {}\n"
+                    "inline bool sensor_driver_bind_data() {}\n"
+                )
+            },
+            ("missing shared sensor lifecycle guard",),
+        ),
+        (
+            {
+                "button_grid_weather_driver.h": (
+                    "inline bool weather_driver_setup_visual() {}\n"
+                    "inline bool weather_driver_bind_data() {}\n"
+                )
+            },
+            ("missing shared weather lifecycle guard",),
+        ),
+        (
+            {
+                "button_grid_image.h": (
+                    "inline void image_card_start_next_queued_download() {\n"
+                    "  for (int i = 0; i < IMAGE_CARD_MAX_CONTEXTS; i++) {}\n"
+                    "}\n"
+                    "inline void reset_image_card_pool(const GridConfig &cfg) {\n"
+                    "  int count = cfg.image_card_image_count;\n"
+                    "  for (int i = 0; i < count; i++) {}\n"
+                    "}\n"
+                )
+            },
+            ("reset every image-card context, including disabled slots",),
+        ),
+        (
+            {
+                "button_grid_image.h": (
+                    "inline void reset_image_card_pool(const GridConfig &cfg) {\n"
+                    "  for (int i = 0; i < IMAGE_CARD_MAX_CONTEXTS; i++) {}\n"
+                    "}\n"
+                )
+            },
+            (),
         ),
     )
     for files, expected in cases:

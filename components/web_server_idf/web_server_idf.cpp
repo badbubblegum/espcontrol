@@ -64,6 +64,12 @@ static constexpr const char *ESPCONTROL_PROJECT_VERSION = ESPHOME_PROJECT_VERSIO
 static constexpr const char *ESPCONTROL_PROJECT_VERSION = "";
 #endif
 
+#ifdef ESPCONTROL_DEVICE_SLUG
+static constexpr const char *ESPCONTROL_DEVICE_PROFILE = ESPCONTROL_DEVICE_SLUG;
+#else
+static constexpr const char *ESPCONTROL_DEVICE_PROFILE = "";
+#endif
+
 void append_json_string(std::string &out, const char *value) {
   out.push_back('"');
   for (const char *p = value; p != nullptr && *p != '\0'; ++p) {
@@ -99,6 +105,8 @@ std::string firmware_version_json() {
   append_json_string(out, ESPCONTROL_PROJECT_VERSION);
   out.append(",\"firmware_version\":");
   append_json_string(out, ESPCONTROL_PROJECT_VERSION);
+  out.append(",\"device_slug\":");
+  append_json_string(out, ESPCONTROL_DEVICE_PROFILE);
   out.append(",\"version\":");
   append_json_string(out, ESPCONTROL_PROJECT_VERSION);
   out.push_back('}');
@@ -117,6 +125,12 @@ bool handle_firmware_version_request(AsyncWebServerRequest *request) {
   std::string body = firmware_version_json();
   request->send(200, "application/json", body.c_str());
   return true;
+}
+
+void apply_no_cache_headers(httpd_req_t *req) {
+  httpd_resp_set_hdr(req, "Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+  httpd_resp_set_hdr(req, "Pragma", "no-cache");
+  httpd_resp_set_hdr(req, "Expires", "0");
 }
 
 // Non-blocking send function to prevent watchdog timeouts when TCP buffers are full
@@ -352,6 +366,7 @@ void AsyncWebServerRequest::redirect(const std::string &url) {
   httpd_resp_set_status(*this, "302 Found");
   httpd_resp_set_hdr(*this, "Location", url.c_str());
   httpd_resp_set_hdr(*this, "Connection", "close");
+  apply_no_cache_headers(*this);
   httpd_resp_send(*this, nullptr, 0);
 }
 
@@ -378,6 +393,7 @@ void AsyncWebServerRequest::init_response_(AsyncWebServerResponse *rsp, int code
     httpd_resp_set_type(*this, content_type);
   }
   httpd_resp_set_hdr(*this, "Accept-Ranges", "none");
+  apply_no_cache_headers(*this);
 
   for (const auto &header : DefaultHeaders::Instance().headers_) {
     httpd_resp_set_hdr(*this, header.name, header.value);

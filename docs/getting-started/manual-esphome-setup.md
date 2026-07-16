@@ -25,7 +25,8 @@ Each screen uses a different ESPHome package file. Pick the one that matches you
 
 | Panel | Package file |
 | --- | --- |
-| 10.1-inch JC8012P4A1 | `devices/guition-esp32-p4-jc8012p4a1/packages.yaml` |
+| 10.1-inch JC8012P4A1 original panel, rear case `2622` or lower | `devices/guition-esp32-p4-jc8012p4a1/packages.yaml` |
+| 10.1-inch JC8012P4A1 new panel, rear case `2624` or higher | `devices/guition-esp32-p4-jc8012p4a1-v2/packages.yaml` |
 | 7-inch JC1060P470 | `devices/guition-esp32-p4-jc1060p470/packages.yaml` |
 | 4.3-inch JC4880P443 | `devices/guition-esp32-p4-jc4880p443/packages.yaml` |
 | 4-inch ESP32-P4 86 Panel | `devices/esp32-p4-86/packages.yaml` |
@@ -170,7 +171,7 @@ If ESPHome cannot access the USB port directly, choose **Manual download** inste
 1. Wait for the display to join WiFi.
 2. Add it to Home Assistant when the ESPHome integration discovers it.
 3. Open the display address in a browser, for example `http://espcontrol.local`.
-4. Configure cards, colours, brightness, and other settings from the built-in web page.
+4. Configure cards, active colour, brightness, and other settings from the built-in web page.
 5. Follow [Enable Actions](/getting-started/home-assistant-actions) so the display is allowed to control your Home Assistant devices.
 
 ## Updating Later

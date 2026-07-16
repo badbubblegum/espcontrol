@@ -9,6 +9,7 @@
 substitutions:
   espcontrol_component_url: "https://github.com/jtenniswood/espcontrol"
   espcontrol_component_ref: "main"
+  mdi_font_file: "https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/fonts/materialdesignicons-webfont.ttf"
 
 # ---------------------------------------------------------------------------
 # ESP32-P4 platform (16MB flash, ESP-IDF framework)
@@ -33,7 +34,7 @@ esp32:
       disable_vfs_support_dir: false
     sdkconfig_options:
       CONFIG_SDMMC_HOST_DEFAULT: "y"
-      CONFIG_COMPILER_OPTIMIZATION_SIZE: "y"
+      CONFIG_COMPILER_OPTIMIZATION_PERF: "y"
       # HTTPS firmware checks need more stack on ESP32-P4; the default main
       # task stack can trip the stack protector during mbedTLS setup.
       CONFIG_ESP_MAIN_TASK_STACK_SIZE: "8192"
@@ -112,27 +113,6 @@ esphome:
       then:
         - lambda: |-
             ESP_LOGI("jc1060p470", "Bootfix marker 2026-05-22 active");
-    - priority: -50
-      then:
-        - lambda: |-
-            if (id(button_on_color).state == "000000" &&
-                id(button_off_color).state == "FFFFFF" &&
-                id(sensor_card_color).state == "FFFFFF") {
-              auto on = id(button_on_color).make_call();
-              on.set_value("FF8C00");
-              on.perform();
-
-              auto off = id(button_off_color).make_call();
-              off.set_value("313131");
-              off.perform();
-
-              auto sensor = id(sensor_card_color).make_call();
-              sensor.set_value("212121");
-              sensor.perform();
-
-              global_preferences->sync();
-              ESP_LOGI("jc1060p470", "Reset e-paper color defaults to color display colors");
-            }
     - priority: -100
       then:
         - lambda: 'id(screen_rotation_ready) = true;'
@@ -224,8 +204,10 @@ light:
             condition:
               lambda: |-
                 auto now = panel_time_or_fallback(id(panel_time).now(), id(homeassistant_time).now());
-                return (id(screen_schedule_asleep) &&
-                        !id(schedule_mode_clock)) ||
+                return (id(display_mode_controller).target_source_is(
+                            espcontrol::DisplayRequestSource::SCREEN_SCHEDULE) &&
+                        id(display_mode_controller).target_mode_is(
+                            espcontrol::DisplayMode::DISPLAY_OFF)) ||
                        screen_schedule_waiting_for_time(
                          id(screen_schedule_trigger).state,
                          id(schedule_enabled).state,
@@ -235,7 +217,9 @@ light:
             else:
               - if:
                   condition:
-                    lambda: 'return id(screensaver_display_off_active);'
+                    lambda: |-
+                      return id(display_mode_controller).current_mode_is(
+                          espcontrol::DisplayMode::DISPLAY_OFF);
                   then:
                     - script.execute: screensaver_wake
     on_turn_off:
@@ -243,10 +227,8 @@ light:
         - if:
             condition:
               lambda: |-
-                return !id(display_asleep) &&
-                       !id(screen_schedule_asleep) &&
-                       !id(screensaver_display_off_active) &&
-                       !id(screensaver_dimmed_active);
+                return id(display_mode_controller).target_mode_is(
+                    espcontrol::DisplayMode::ACTIVE);
             then:
               - script.execute: screen_schedule_manual_sleep
 
@@ -279,6 +261,8 @@ touchscreen:
     reset_pin: GPIO22
     interrupt_pin: GPIO21
     on_touch:
+      - script.execute: cover_art_pause_after_touch
+      - script.wait: cover_art_pause_after_touch
       - script.execute: screensaver_wake
 
 # ---------------------------------------------------------------------------

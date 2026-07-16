@@ -299,7 +299,7 @@ inline lv_obj_t *todo_lite_create_row(TodoCardCtx *ctx, TodoLiteItem *item,
   lv_obj_set_size(box, checkbox_size, checkbox_size);
   lv_obj_set_style_radius(box, checkbox_size / 4, LV_PART_MAIN);
   lv_obj_set_style_bg_opa(box, LV_OPA_TRANSP, LV_PART_MAIN);
-  lv_obj_set_style_border_color(box, lv_color_hex(DARK_TEXT_MUTED), LV_PART_MAIN);
+  lv_obj_set_style_border_color(box, lv_color_hex(DARK_BORDER), LV_PART_MAIN);
   lv_obj_set_style_border_width(box, 2, LV_PART_MAIN);
   lv_obj_set_style_shadow_width(box, 0, LV_PART_MAIN);
   lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
@@ -579,7 +579,7 @@ inline void todo_card_open_modal(TodoCardCtx *ctx) {
   if (!todo_card_context_valid(ctx) || ctx->entity_id.empty()) return;
   ControlModalShell shell = control_modal_open_shell(
     ControlModalKind::TODO_LIST, ctx->btn, ctx->width_compensation_percent,
-    ctx->icon_font, "\U000F0141", false, todo_lite_modal_hide);
+    ctx->icon_font, todo_lite_modal_hide);
   TodoLiteModalUi &ui = todo_lite_modal_ui();
   ui.active = ctx;
   ui.overlay = shell.overlay;
@@ -653,7 +653,6 @@ inline TodoCardCtx *create_todo_card_context(
 
 inline void subscribe_todo_state(TodoCardCtx *ctx) {
   if (!todo_card_context_valid(ctx) || ctx->entity_id.empty()) return;
-  register_ha_control_availability(ctx->btn, ctx->btn, false);
   ha_subscribe_state(
     ctx->entity_id,
     std::function<void(esphome::StringRef)>([ctx](esphome::StringRef state) {
@@ -664,7 +663,6 @@ inline void subscribe_todo_state(TodoCardCtx *ctx) {
       } else {
         todo_lite_copy_text(ctx->count_text, sizeof(ctx->count_text), state);
       }
-      apply_control_availability(ctx->btn, ctx->btn, ctx->available, false);
       todo_lite_apply_card_text(ctx);
       TodoLiteModalUi &ui = todo_lite_modal_ui();
       if (ui.active == ctx && !ctx->available) {
@@ -717,7 +715,7 @@ struct TodoCardCtx {
   const lv_font_t *label_font = nullptr;
   const lv_font_t *list_font = nullptr;
   const lv_font_t *icon_font = nullptr;
-  uint32_t secondary_color = DEFAULT_OFF_COLOR;
+  uint32_t secondary_color = SECONDARY_GREY;
   int width_compensation_percent = 100;
   bool available = false;
 };
@@ -1026,7 +1024,7 @@ inline lv_obj_t *todo_modal_create_list_item_row(
   lv_coord_t label_x = 0;
   lv_coord_t label_w = content_width;
   if (show_checkbox) {
-    uint32_t checkbox_color = checked ? DARK_TEXT_SOFT : DARK_TEXT_MUTED;
+    uint32_t checkbox_color = checked ? DARK_TEXT_PRIMARY : DARK_BORDER;
     lv_obj_t *box = lv_obj_create(row);
     lv_obj_set_size(box, checkbox_size, checkbox_size);
     lv_obj_set_style_radius(box, checkbox_size / 4, LV_PART_MAIN);
@@ -1299,7 +1297,7 @@ inline void todo_card_open_modal(TodoCardCtx *ctx) {
   if (!todo_card_context_valid(ctx) || ctx->entity_id.empty()) return;
   ControlModalShell shell = control_modal_open_shell(
     ControlModalKind::TODO_LIST, ctx->btn, ctx->width_compensation_percent,
-    ctx->icon_font, "\U000F0141", false, todo_modal_hide);
+    ctx->icon_font, todo_modal_hide);
   TodoModalUi &ui = todo_modal_ui();
   ui.active = ctx;
   ui.overlay = shell.overlay;
@@ -1375,14 +1373,12 @@ inline TodoCardCtx *create_todo_card_context(
 
 inline void subscribe_todo_state(TodoCardCtx *ctx) {
   if (!todo_card_context_valid(ctx) || ctx->entity_id.empty()) return;
-  register_ha_control_availability(ctx->btn, ctx->btn, false);
   ha_subscribe_state(
     ctx->entity_id,
     std::function<void(esphome::StringRef)>([ctx](esphome::StringRef state) {
       bool unavailable = ha_state_unavailable_ref(state);
       ctx->available = !unavailable;
       ctx->count_text = unavailable ? "--" : string_ref_limited(state, HA_SHORT_STATE_MAX_LEN);
-      apply_control_availability(ctx->btn, ctx->btn, ctx->available, false);
       todo_apply_card_text(ctx);
       if (todo_modal_ui().active == ctx && !ctx->available) {
         todo_modal_ui().waiting_for_ha = true;

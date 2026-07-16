@@ -15,8 +15,6 @@ export function normalizeClockBarTemperatureEntities(value: unknown): string[] {
   return out.slice(0, 1);
 }
 
-export const CLOCK_BAR_FIXED_LAYOUT = "left:temperature|middle:time|right:voice,network";
-
 export function normalizeLanguage(value: unknown): string {
   const language = String(value == null ? "" : value).trim().toLowerCase();
   return language || "en";
@@ -46,6 +44,14 @@ export function normalizeScheduleWakeTimeout(value: unknown): number {
   if (!Number.isFinite(n) || n <= 0) return 60;
   if (n < 10) return 10;
   if (n > 3600) return 3600;
+  return Math.round(n);
+}
+
+export function normalizeCoverArtDelay(value: unknown): number {
+  const n = parseFloat(String(value));
+  if (!Number.isFinite(n)) return 10;
+  if (n < 3) return 3;
+  if (n > 300) return 300;
   return Math.round(n);
 }
 
@@ -140,6 +146,10 @@ export function normalizeHomeAssistantArtworkPort(value: unknown): number {
   return port;
 }
 
+export function normalizeHomeAssistantArtworkProtocol(value: unknown): string {
+  return String(value || "").trim().toLowerCase() === "https" ? "https" : "http";
+}
+
 export function normalizeNtpServer(value: unknown, fallback: string): string {
   const server = String(value == null ? "" : value).trim();
   return server || fallback;
@@ -219,14 +229,17 @@ export function normalizeBackupScreenSettings(
 export interface BackupPanelSettingsCurrent {
   timezone: string;
   language: string;
-  clockBarLayout: string;
   clockFormat: string;
   clockFormatOptions: readonly string[];
   ntpDefaults: readonly string[];
   ntpServer1: string;
   ntpServer2: string;
   ntpServer3: string;
+  coverArtHomeAssistantProtocol: string;
   coverArtHomeAssistantPort: number;
+  autoUpdate: boolean;
+  updateFrequency: string;
+  updateFrequencyOptions: readonly string[];
   screenRotationOptions: readonly string[];
 }
 
@@ -237,7 +250,6 @@ export interface BackupPanelSettingsState {
   outdoorTempEntity: string;
   clockBarTemperatureEntities: string[];
   clockBar: boolean;
-  clockBarLayout: string;
   clockBarTime: boolean;
   networkStatusIcon: boolean;
   voiceServices: boolean;
@@ -261,10 +273,12 @@ export interface BackupPanelSettingsState {
   coverArtMediaPlayerEntity: string;
   coverArtAttributeConditions: string;
   coverArtDelay: unknown;
-  coverArtTouchPause: unknown;
   coverArtTrackOverlayDuration: unknown;
   coverArtHideExternalInput: boolean;
+  coverArtHomeAssistantProtocol: string;
   coverArtHomeAssistantPort: number;
+  autoUpdate: boolean;
+  updateFrequency: string;
   screensaverAction: string;
   clockScreensaver: boolean;
   clockBrightnessDay: number;
@@ -283,6 +297,11 @@ function normalizeScreensaverMode(value: unknown): string {
 function normalizeScreenRotationValue(value: unknown, options: readonly string[]): string {
   const rotation = String(value == null ? "" : value);
   return options.indexOf(rotation) !== -1 ? rotation : "0";
+}
+
+function normalizeUpdateFrequency(value: unknown, options: readonly string[], fallback: string): string {
+  const frequency = String(value == null ? "" : value);
+  return options.indexOf(frequency) !== -1 ? frequency : fallback;
 }
 
 export function normalizeBackupPanelSettings(
@@ -328,7 +347,6 @@ export function normalizeBackupPanelSettings(
     outdoorTempEntity: clockBarTemperatureEntities[0] || "",
     clockBarTemperatureEntities,
     clockBar: objectValue(settings, "clock_bar") != null ? !!settings.clock_bar : false,
-    clockBarLayout: CLOCK_BAR_FIXED_LAYOUT,
     clockBarTime: objectValue(settings, "clock_bar_time") != null ? !!settings.clock_bar_time : true,
     networkStatusIcon: objectValue(settings, "network_status_icon") != null ? !!settings.network_status_icon : true,
     voiceServices: objectValue(settings, "voice_services") != null ? !!settings.voice_services : false,
@@ -356,20 +374,36 @@ export function normalizeBackupPanelSettings(
       : current.ntpServer3,
     screensaverMode: normalizeScreensaverMode(settings.screensaver_mode),
     presenceSensorEntity: String(settings.presence_sensor_entity || ""),
-    mediaPlayerSleepPrevention: !!settings.media_player_sleep_prevention,
-    mediaPlayerSleepPreventionEntity: String(settings.media_player_sleep_prevention_entity || ""),
+    mediaPlayerSleepPrevention: objectValue(settings, "media_player_sleep_prevention") != null
+      ? !!settings.media_player_sleep_prevention
+      : true,
+    mediaPlayerSleepPreventionEntity: String(settings.media_player_sleep_prevention_entity || settings.cover_art_media_player_entity || ""),
     coverArtScreensaver: !!settings.cover_art_screensaver,
     coverArtMediaPlayerEntity: String(settings.cover_art_media_player_entity || settings.media_player_sleep_prevention_entity || ""),
     coverArtAttributeConditions: String(settings.cover_art_attribute_conditions || settings.cover_art_conditions || ""),
-    coverArtDelay: objectValue(settings, "cover_art_delay") != null ? settings.cover_art_delay : 10,
-    coverArtTouchPause: objectValue(settings, "cover_art_touch_pause") != null ? settings.cover_art_touch_pause : 120,
+    coverArtDelay: normalizeCoverArtDelay(
+      objectValue(settings, "cover_art_delay") != null ? settings.cover_art_delay : 10,
+    ),
     coverArtTrackOverlayDuration: objectValue(settings, "cover_art_track_overlay_duration") != null ? settings.cover_art_track_overlay_duration : 5,
     coverArtHideExternalInput: objectValue(settings, "cover_art_hide_external_input") != null
       ? !!settings.cover_art_hide_external_input
       : true,
+    coverArtHomeAssistantProtocol: objectValue(settings, "home_assistant_artwork_protocol") != null
+      ? normalizeHomeAssistantArtworkProtocol(settings.home_assistant_artwork_protocol)
+      : normalizeHomeAssistantArtworkProtocol(current.coverArtHomeAssistantProtocol),
     coverArtHomeAssistantPort: objectValue(settings, "home_assistant_artwork_port") != null
       ? normalizeHomeAssistantArtworkPort(settings.home_assistant_artwork_port)
       : normalizeHomeAssistantArtworkPort(current.coverArtHomeAssistantPort),
+    autoUpdate: objectValue(settings, "firmware_auto_update") != null
+      ? !!settings.firmware_auto_update
+      : current.autoUpdate,
+    updateFrequency: objectValue(settings, "firmware_update_frequency") != null
+      ? normalizeUpdateFrequency(
+        settings.firmware_update_frequency,
+        current.updateFrequencyOptions,
+        current.updateFrequency,
+      )
+      : current.updateFrequency,
     screensaverAction,
     clockScreensaver: screensaverAction === "clock",
     clockBrightnessDay,

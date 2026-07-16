@@ -11,6 +11,7 @@ esphome:
   platformio_options:
     build_flags:
       - "-DLV_USE_BIDI=1"
+      - '-DESPCONTROL_DEVICE_SLUG=\"${device_slug}\"'
 
 api:
   reboot_timeout: 0s
@@ -22,6 +23,8 @@ api:
         ESP_LOGI("api", "API client connected: %s", client_info.c_str());
         bool is_home_assistant = client_info.find("Home Assistant") != std::string::npos;
         if (is_home_assistant && ha_api_connected()) {
+          id(ha_reconnect_flow).stop();
+          id(ha_restore_after_api).execute();
           if (!client_address.empty()) {
             std::string host = client_address;
             if (host.rfind("::ffff:", 0) == 0) host = host.substr(7);
@@ -41,7 +44,6 @@ api:
           }
           refresh_image_cards();
           if (ha_api_state_connected()) {
-            apply_registered_ha_control_availability(true);
             refresh_weather_forecast_cards();
             ha_flush_deferred_state_requests();
           }
@@ -70,6 +72,13 @@ api:
           ha_flush_deferred_state_requests();
         }
         todo_reload_active_modal();
+    - delay: 25s
+    - lambda: |-
+        if (ha_api_state_connected()) {
+          refresh_weather_forecast_cards();
+          ha_flush_deferred_state_requests();
+        }
+        todo_reload_active_modal();
   on_client_disconnected:
     - lambda: |-
         ESP_LOGW("api", "API client disconnected: %s", client_info.c_str());
@@ -80,7 +89,7 @@ api:
         weather_forecast_cancel_pending_requests();
         cover_stop_cancel_pending_request();
         todo_cancel_pending_request("api disconnected");
-        apply_registered_ha_control_availability(false);
+    - script.execute: ha_reconnect_flow
 
 interval:
   - interval: 5s
@@ -109,7 +118,7 @@ web_server:
   port: 80
   version: 3
   include_internal: true
-  js_url: https://jtenniswood.github.io/espcontrol/webserver/${device_slug}/www.js?v=${firmware_version}&ui=20260611-livecheck
+  js_url: https://jtenniswood.github.io/espcontrol/webserver/www.js?device=${device_slug}&v=${firmware_version}&ui=20260714-shared
   sorting_groups:
     - id: sg_button
       name: "Button Configuration"
@@ -130,6 +139,9 @@ web_server:
       name: "Firmware"
       sorting_weight: 40
 button:
+  - platform: restart
+    name: "${entity_display_restart}"
+
   - platform: template
     name: "Apply Configuration"
     internal: true

@@ -5,13 +5,182 @@
 // through this helper.
 
 #include "button_grid_contract_generated.h"
+#include "button_grid_card_registry.h"
+
+namespace espcontrol::cards {
+
+enum class Surface : uint8_t {
+  MAIN_GRID,
+  SUBPAGE,
+};
+
+struct Context {
+  espcontrol::card_runtime::CardRuntimeSpec runtime;
+  Family family = Family::UNKNOWN;
+  Surface surface = Surface::MAIN_GRID;
+  bool known = false;
+  bool allow_in_subpage = false;
+  bool legacy_dispatch = true;
+};
+
+inline Family family_for_runtime_type(espcontrol::card_runtime::CardTypeId type) {
+  using Type = espcontrol::card_runtime::CardTypeId;
+  switch (type) {
+    case Type::SWITCH:
+    case Type::LIGHT_SWITCH: return Family::TOGGLE;
+    case Type::ACTION: return Family::ACTION;
+    case Type::VACUUM: return Family::VACUUM;
+    case Type::LAWN_MOWER: return Family::MOWER;
+    case Type::ALARM: return Family::ALARM;
+    case Type::ALARM_ACTION: return Family::ALARM_ACTION;
+    case Type::CALENDAR:
+    case Type::CLOCK:
+    case Type::TIMEZONE: return Family::DATE_TIME;
+    case Type::CLIMATE:
+    case Type::CLIMATE_CONTROL: return Family::CLIMATE;
+    case Type::COVER: return Family::COVER;
+    case Type::DOOR_WINDOW:
+    case Type::PRESENCE: return Family::OCCUPANCY;
+    case Type::FAN_DIRECTION:
+    case Type::FAN_OSCILLATE:
+    case Type::FAN_PRESET:
+    case Type::FAN_SPEED:
+    case Type::FAN_CONTROL:
+    case Type::FAN_SWITCH: return Family::FAN;
+    case Type::GARAGE:
+    case Type::GATE:
+    case Type::LOCK: return Family::ACCESS;
+    case Type::IMAGE: return Family::IMAGE;
+    case Type::INTERNAL: return Family::INTERNAL;
+    case Type::LIGHT_CONTROL: return Family::LIGHT_CONTROL;
+    case Type::LIGHT_TEMPERATURE: return Family::LIGHT_TEMPERATURE;
+    case Type::LOCAL_SENSOR: return Family::LOCAL_SENSOR;
+    case Type::MEDIA: return Family::MEDIA;
+    case Type::OPTION_SELECT: return Family::OPTION_SELECT;
+    case Type::PUSH: return Family::PUSH;
+    case Type::SCREEN_LOCK: return Family::SCREEN_LOCK;
+    case Type::SENSOR: return Family::SENSOR;
+    case Type::SLIDER:
+    case Type::LIGHT_BRIGHTNESS: return Family::SLIDER;
+    case Type::SUBPAGE: return Family::SUBPAGE;
+    case Type::WEATHER:
+    case Type::WEATHER_FORECAST: return Family::WEATHER;
+    case Type::WEBHOOK: return Family::WEBHOOK;
+    default: return Family::UNKNOWN;
+  }
+}
+
+inline bool driver_uses_legacy_dispatch(
+    const espcontrol::card_runtime::CardRuntimeSpec &runtime) {
+  using Driver = espcontrol::card_runtime::CardDriverId;
+  switch (runtime.driver) {
+    case Driver::STATUS_ENTITY: return false;
+    case Driver::DATE_TIME:
+    case Driver::SENSOR:
+    case Driver::WEATHER:
+      return false;
+    default: return true;
+  }
+}
+
+inline Context context_for(const std::string &type, const std::string &mode,
+                           Surface surface = Surface::MAIN_GRID) {
+  using namespace espcontrol::card_runtime;
+  Context context;
+  context.runtime = card_runtime_spec(card_type_id(type));
+  context.runtime.driver = resolve_card_driver(context.runtime.type, mode);
+  context.family = family_for_runtime_type(context.runtime.type);
+  context.surface = surface;
+  context.known = context.runtime.type != CardTypeId::UNKNOWN;
+  context.allow_in_subpage = has_capability(context.runtime, CAPABILITY_SUBPAGE);
+  context.legacy_dispatch = driver_uses_legacy_dispatch(context.runtime);
+
+  // These saved-config types predate the generated contract. Keep them on the
+  // established dispatcher until they receive their own generated definition.
+  if (!context.known && type == "local") {
+    context.family = Family::ACTION;
+    context.known = true;
+    context.allow_in_subpage = true;
+    context.runtime.driver = CardDriverId::ACTION;
+    context.runtime.capabilities = static_cast<uint16_t>(
+        CAPABILITY_SUBSCRIPTIONS | CAPABILITY_ACTIONS |
+        CAPABILITY_RUNTIME_ALLOCATION | CAPABILITY_SUBPAGE);
+  } else if (!context.known && type == "text_sensor") {
+    context.family = Family::SENSOR;
+    context.known = true;
+    context.allow_in_subpage = true;
+    context.runtime.driver = CardDriverId::SENSOR;
+    context.runtime.capabilities = static_cast<uint16_t>(
+        CAPABILITY_INFORMATION_ONLY | CAPABILITY_SUBSCRIPTIONS | CAPABILITY_SUBPAGE);
+    context.legacy_dispatch = false;
+  } else if (!context.known && type == "todo") {
+    context.family = Family::TODO;
+    context.known = true;
+    context.allow_in_subpage = true;
+    context.runtime.capabilities = static_cast<uint16_t>(
+        CAPABILITY_SUBSCRIPTIONS | CAPABILITY_ACTIONS | CAPABILITY_MODAL |
+        CAPABILITY_RUNTIME_ALLOCATION | CAPABILITY_SUBPAGE);
+  }
+  return context;
+}
+
+}  // namespace espcontrol::cards
+
+template<typename Config>
+inline auto card_runtime_context(
+    const Config &config,
+    espcontrol::cards::Surface surface = espcontrol::cards::Surface::MAIN_GRID)
+    -> decltype((void) config.type, (void) config.sensor,
+                espcontrol::cards::Context()) {
+  return espcontrol::cards::context_for(config.type, config.sensor, surface);
+}
+
+inline espcontrol::cards::Context card_runtime_context(
+    const std::string &type,
+    espcontrol::cards::Surface surface = espcontrol::cards::Surface::MAIN_GRID) {
+  return espcontrol::cards::context_for(type, "", surface);
+}
+
+inline espcontrol::cards::Registration card_runtime_registration(const std::string &type) {
+  const auto context = card_runtime_context(type);
+  return espcontrol::cards::registration(
+      context.family, context.known, context.allow_in_subpage);
+}
+
+inline espcontrol::cards::Family card_runtime_family(const std::string &type) {
+  return card_runtime_context(type).family;
+}
+
+inline bool card_runtime_has_capability(
+    const espcontrol::cards::Context &context,
+    espcontrol::card_runtime::CardCapabilityFlag capability) {
+  return espcontrol::card_runtime::has_capability(context.runtime, capability);
+}
+
+inline bool card_runtime_information_only(const espcontrol::cards::Context &context) {
+  return card_runtime_has_capability(
+      context, espcontrol::card_runtime::CAPABILITY_INFORMATION_ONLY);
+}
+
+inline bool card_runtime_passive(const espcontrol::cards::Context &context) {
+  return card_runtime_information_only(context) &&
+         !card_runtime_has_capability(
+             context, espcontrol::card_runtime::CAPABILITY_ACTIONS);
+}
+
+inline bool card_runtime_uses_slider_visual(const espcontrol::cards::Context &context) {
+  using Type = espcontrol::card_runtime::CardTypeId;
+  return context.family == espcontrol::cards::Family::SLIDER ||
+         context.family == espcontrol::cards::Family::COVER ||
+         context.runtime.type == Type::FAN_SPEED;
+}
 
 inline const char *card_runtime_label(const std::string &type) {
   return card_contract_card_label(type);
 }
 
 inline bool card_runtime_allow_in_subpage(const std::string &type) {
-  return card_contract_allow_in_subpage(type);
+  return card_runtime_context(type).allow_in_subpage;
 }
 
 inline std::string card_runtime_subpage_type_from_code(const std::string &code) {
@@ -70,6 +239,10 @@ constexpr const char *card_runtime_option_name_state_output_2() {
   return CARD_CONTRACT_OPTION_NAME_STATE_OUTPUT_2;
 }
 
+constexpr const char *card_runtime_option_name_time_unit() {
+  return CARD_CONTRACT_OPTION_NAME_TIME_UNIT;
+}
+
 constexpr const char *card_runtime_option_name_state_low_label() {
   return CARD_CONTRACT_OPTION_NAME_STATE_LOW_LABEL;
 }
@@ -90,12 +263,12 @@ constexpr const char *card_runtime_option_name_image_modal_mode() {
   return CARD_CONTRACT_OPTION_NAME_IMAGE_MODAL_MODE;
 }
 
-constexpr const char *card_runtime_option_name_image_refresh() {
-  return CARD_CONTRACT_OPTION_NAME_IMAGE_REFRESH;
+constexpr const char *card_runtime_option_name_media_cover_art() {
+  return CARD_CONTRACT_OPTION_NAME_MEDIA_COVER_ART;
 }
 
-constexpr const char *card_runtime_option_name_image_refresh_mode() {
-  return CARD_CONTRACT_OPTION_NAME_IMAGE_REFRESH_MODE;
+constexpr const char *card_runtime_option_name_cover_art_action() {
+  return CARD_CONTRACT_OPTION_NAME_COVER_ART_ACTION;
 }
 
 constexpr const char *card_runtime_option_name_light_tabs() {
@@ -104,6 +277,38 @@ constexpr const char *card_runtime_option_name_light_tabs() {
 
 constexpr const char *card_runtime_option_name_cover_tabs() {
   return CARD_CONTRACT_OPTION_NAME_COVER_TABS;
+}
+
+constexpr const char *card_runtime_option_name_fan_tabs() {
+  return CARD_CONTRACT_OPTION_NAME_FAN_TABS;
+}
+
+constexpr const char *card_runtime_option_name_label_display() {
+  return CARD_CONTRACT_OPTION_NAME_LABEL_DISPLAY;
+}
+
+constexpr const char *card_runtime_option_name_number_display() {
+  return CARD_CONTRACT_OPTION_NAME_NUMBER_DISPLAY;
+}
+
+constexpr const char *card_runtime_option_name_temperature_step() {
+  return CARD_CONTRACT_OPTION_NAME_TEMPERATURE_STEP;
+}
+
+constexpr const char *card_runtime_option_name_volume_max() {
+  return CARD_CONTRACT_OPTION_NAME_VOLUME_MAX;
+}
+
+constexpr const char *card_runtime_option_name_playlist_content_id() {
+  return CARD_CONTRACT_OPTION_NAME_PLAYLIST_CONTENT_ID;
+}
+
+constexpr const char *card_runtime_option_name_playlist_content_type() {
+  return CARD_CONTRACT_OPTION_NAME_PLAYLIST_CONTENT_TYPE;
+}
+
+constexpr const char *card_runtime_option_name_playlist_player_source() {
+  return CARD_CONTRACT_OPTION_NAME_PLAYLIST_PLAYER_SOURCE;
 }
 
 inline bool card_runtime_large_numbers_supported(const std::string &type,
@@ -127,6 +332,14 @@ inline bool card_runtime_cover_modal_mode(const std::string &mode) {
   return mode == "modal" && card_runtime_cover_mode_valid(mode);
 }
 
+inline bool card_runtime_cover_control_tab_valid(const std::string &tab) {
+  return card_contract_cover_control_tab_valid(tab);
+}
+
+inline const char *card_runtime_cover_control_tabs_default() {
+  return CARD_CONTRACT_COVER_CONTROL_TABS_DEFAULT;
+}
+
 inline bool card_runtime_cover_command_mode(const std::string &mode) {
   return card_runtime_cover_mode_valid(mode) &&
          mode != "" && mode != "toggle" && mode != "tilt" && mode != "modal";
@@ -148,6 +361,20 @@ inline std::string card_runtime_garage_label_display(const std::string &value) {
   return card_contract_garage_label_display_valid(value)
     ? value
     : CARD_CONTRACT_GARAGE_LABEL_DISPLAY_DEFAULT;
+}
+
+inline bool card_runtime_gate_mode_valid(const std::string &mode) {
+  return card_contract_gate_mode_valid(mode);
+}
+
+inline bool card_runtime_gate_command_mode(const std::string &mode) {
+  return card_runtime_gate_mode_valid(mode) && !mode.empty();
+}
+
+inline std::string card_runtime_gate_label_display(const std::string &value) {
+  return card_contract_gate_label_display_valid(value)
+    ? value
+    : CARD_CONTRACT_GATE_LABEL_DISPLAY_DEFAULT;
 }
 
 inline bool card_runtime_lock_mode_valid(const std::string &mode) {
@@ -194,6 +421,18 @@ inline bool card_runtime_media_now_playing_control(const std::string &precision)
     sizeof(CARD_CONTRACT_MEDIA_NOW_PLAYING_CONTROLS) / sizeof(CARD_CONTRACT_MEDIA_NOW_PLAYING_CONTROLS[0]));
 }
 
+inline int card_runtime_media_volume_max_min() {
+  return CARD_CONTRACT_MEDIA_VOLUME_MAX_MIN;
+}
+
+inline int card_runtime_media_volume_max_max() {
+  return CARD_CONTRACT_MEDIA_VOLUME_MAX_MAX;
+}
+
+inline int card_runtime_media_volume_max_default() {
+  return CARD_CONTRACT_MEDIA_VOLUME_MAX_DEFAULT;
+}
+
 inline bool card_runtime_alarm_action_mode_valid(const std::string &mode) {
   return card_contract_alarm_action_mode_valid(mode);
 }
@@ -206,6 +445,18 @@ inline const char *card_runtime_alarm_action_mode_at(size_t index) {
   return index < card_runtime_alarm_action_mode_count()
     ? CARD_CONTRACT_ALARM_ACTION_MODES[index]
     : "";
+}
+
+inline size_t card_runtime_alarm_default_action_count() {
+  return card_contract_alarm_default_action_count();
+}
+
+inline const char *card_runtime_alarm_default_action_at(size_t index) {
+  return card_contract_alarm_default_action_at(index);
+}
+
+inline size_t card_runtime_alarm_max_visible_actions() {
+  return CARD_CONTRACT_ALARM_MAX_VISIBLE_ACTIONS;
 }
 
 inline const char *card_runtime_alarm_action_service(const std::string &mode) {
@@ -233,10 +484,32 @@ inline std::string card_runtime_alarm_label_display(const std::string &value) {
     : CARD_CONTRACT_ALARM_LABEL_DISPLAY_DEFAULT;
 }
 
+inline std::string card_runtime_image_modal_mode(const std::string &value) {
+  return card_contract_image_modal_mode_valid(value)
+    ? value
+    : CARD_CONTRACT_IMAGE_MODAL_MODE_DEFAULT;
+}
+
+inline const char *card_runtime_image_modal_mode_default() {
+  return CARD_CONTRACT_IMAGE_MODAL_MODE_DEFAULT;
+}
+
+inline bool card_runtime_light_control_tab_valid(const std::string &tab) {
+  return card_contract_light_control_tab_valid(tab);
+}
+
+inline const char *card_runtime_light_control_tabs_default() {
+  return CARD_CONTRACT_LIGHT_CONTROL_TABS_DEFAULT;
+}
+
 inline std::string card_runtime_climate_label_display(const std::string &value) {
   return card_contract_climate_label_display_valid(value)
     ? value
     : CARD_CONTRACT_CLIMATE_LABEL_DISPLAY_DEFAULT;
+}
+
+inline const char *card_runtime_climate_label_display_default() {
+  return CARD_CONTRACT_CLIMATE_LABEL_DISPLAY_DEFAULT;
 }
 
 inline std::string card_runtime_climate_number_display(const std::string &value) {
@@ -245,13 +518,34 @@ inline std::string card_runtime_climate_number_display(const std::string &value)
     : CARD_CONTRACT_CLIMATE_NUMBER_DISPLAY_DEFAULT;
 }
 
+inline const char *card_runtime_climate_number_display_default() {
+  return CARD_CONTRACT_CLIMATE_NUMBER_DISPLAY_DEFAULT;
+}
+
 inline std::string card_runtime_climate_temperature_step(const std::string &value) {
   return card_contract_climate_temperature_step_valid(value)
     ? value
     : CARD_CONTRACT_CLIMATE_TEMPERATURE_STEP_DEFAULT;
 }
 
+inline const char *card_runtime_climate_temperature_step_default() {
+  return CARD_CONTRACT_CLIMATE_TEMPERATURE_STEP_DEFAULT;
+}
+
+inline bool card_runtime_climate_precision_valid(const std::string &precision) {
+  return card_contract_climate_precision_valid(precision);
+}
+
+inline constexpr bool card_runtime_weather_forecast_supported() {
+#if defined(ESPCONTROL_DISABLE_WEATHER_FORECAST) && ESPCONTROL_DISABLE_WEATHER_FORECAST
+  return false;
+#else
+  return true;
+#endif
+}
+
 inline bool card_runtime_weather_forecast_precision(const std::string &precision) {
+  if (!card_runtime_weather_forecast_supported()) return false;
   return card_contract_weather_forecast_precision(precision);
 }
 

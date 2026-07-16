@@ -37,6 +37,12 @@ enum ImageResizeMode {
   COVER,
 };
 
+enum P4PipelinePriority : uint8_t {
+  P4_PIPELINE_DISABLED = 0,
+  P4_PIPELINE_TILE = 1,
+  P4_PIPELINE_MODAL = 2,
+};
+
 /**
  * @brief Download an image from a given URL, and decode it using the specified decoder.
  * The image will then be stored in a buffer, so that it can be re-displayed without the
@@ -59,6 +65,8 @@ class ArtworkImage : public PollingComponent,
               image::ImageType type, image::Transparency transparency, uint32_t buffer_size, bool is_big_endian,
               bool allow_insecure_local_urls);
 
+  ~ArtworkImage() { this->decoder_.reset(); }
+
   void draw(int x, int y, display::Display *display, Color color_on, Color color_off) override;
 
   void update() override;
@@ -76,6 +84,10 @@ class ArtworkImage : public PollingComponent,
   /** Stop any in-flight download/decode while keeping the last completed image buffer available. */
   void cancel_update();
   const std::string &get_url() const { return this->url_; }
+  int get_last_http_status() const { return this->last_http_status_; }
+  bool last_error_was_ha_media_proxy_not_found() const {
+    return this->last_http_status_ == HTTP_CODE_NOT_FOUND && this->last_error_was_ha_media_proxy_;
+  }
 
   void set_target_size(int width, int height) {
     if (width <= 0 || height <= 0) return;
@@ -83,6 +95,10 @@ class ArtworkImage : public PollingComponent,
     this->fixed_height_ = height;
   }
   void set_resize_mode(ImageResizeMode resize_mode) { this->resize_mode_ = resize_mode; }
+  void set_p4_pipeline_priority(P4PipelinePriority priority) {
+    this->p4_pipeline_priority_ = priority;
+  }
+  bool can_use_p4_pipeline(const std::string &url) const;
 
   /** Add the request header */
   template<typename V> void add_request_header(const std::string &header, V value) {
@@ -126,6 +142,7 @@ class ArtworkImage : public PollingComponent,
   int get_content_height() const { return this->buffer_content_height_; }
   int get_content_offset_x() const { return this->buffer_offset_x_; }
   int get_content_offset_y() const { return this->buffer_offset_y_; }
+  ImageResizeMode get_resize_mode() const { return this->resize_mode_; }
   image::ImageType image_type() const { return this->type_; }
 
  protected:
@@ -139,7 +156,9 @@ class ArtworkImage : public PollingComponent,
   bool detect_progressive_jpeg_();
   bool detect_heic_();
   bool create_decoder_(ImageFormat format, size_t total_size);
-  bool is_busy_() const { return this->downloader_ != nullptr || this->decoder_ != nullptr; }
+  bool is_busy_() const {
+    return this->downloader_ != nullptr || this->decoder_ != nullptr || this->p4_pipeline_pending_;
+  }
   bool has_newer_pending_update_() const {
     return this->update_pending_ && !this->pending_url_.empty() && this->pending_url_ != this->url_;
   }
@@ -180,6 +199,11 @@ class ArtworkImage : public PollingComponent,
   void invalidate_lvgl_cache_();
   bool ensure_download_buffer_capacity_();
   bool decode_buffered_data_();
+  bool start_p4_pipeline_(std::vector<http_request::Header> &headers);
+  bool consume_p4_pipeline_result_();
+  void cancel_p4_pipeline_();
+  void note_response_bytes_();
+  void log_timing_(const char *result, size_t bytes_read) const;
   void finish_download_();
   void fail_download_();
 
@@ -213,12 +237,16 @@ class ArtworkImage : public PollingComponent,
    * will *not* change even if the download buffer has been resized.
    */
   size_t download_buffer_initial_size_;
+  size_t max_download_buffer_size_;
+  size_t peak_download_buffer_size_{0};
 
   const ImageFormat format_;
   ImageResizeMode resize_mode_;
   image::Image *placeholder_{nullptr};
 
   std::string url_{""};
+  int last_http_status_{0};
+  bool last_error_was_ha_media_proxy_{false};
 
   std::vector<std::pair<std::string, TemplatableValue<std::string> > > request_headers_;
 
@@ -268,13 +296,24 @@ class ArtworkImage : public PollingComponent,
   std::vector<RetiredBuffer> retired_buffers_{};
   time_t start_time_;
   uint32_t last_data_millis_{0};
+  uint32_t request_started_ms_{0};
+  uint32_t response_ready_ms_{0};
+  uint32_t first_byte_ms_{0};
+  uint32_t transfer_complete_ms_{0};
+  uint32_t decode_started_ms_{0};
   bool update_pending_{false};
   std::string pending_url_{""};
+  P4PipelinePriority p4_pipeline_priority_{P4_PIPELINE_DISABLED};
+  bool p4_pipeline_pending_{false};
+  uint32_t p4_pipeline_generation_{0};
+  size_t completed_transfer_bytes_{0};
   static constexpr uint32_t DOWNLOAD_STALL_TIMEOUT_MS = 10000;
 
   friend bool ImageDecoder::set_size(int width, int height);
   friend void ImageDecoder::draw(int x, int y, int w, int h, const Color &color);
   friend void ImageDecoder::draw_rgb565_block(int x, int y, int w, int h, const uint8_t *data);
+  friend void ImageDecoder::draw_rgb565_frame(int width, int height, size_t stride_bytes,
+                                              const uint8_t *data);
 };
 
 template<typename... Ts> class ArtworkImageSetUrlAction : public Action<Ts...> {
