@@ -3,9 +3,18 @@
 # https://www.waveshare.com/esp32-s3-touch-lcd-7.htm
 # =============================================================================
 
+# =============================================================================
+# DEVICE - Waveshare ESP32-S3-N8R8 7" Capacitive Touch Display 800×480
+# =============================================================================
+
 substitutions:
-  espcontrol_component_url: "https://github.com/jtenniswood/espcontrol"
+  # Change these to point to your personal fork and branch!
+  espcontrol_component_url: "https://github.com/badbubblegum/espcontrol"
   espcontrol_component_ref: "main"
+  
+  # Tell the EspControl UI engine the dimensions of your canvas
+  disp_width: "800"
+  disp_height: "480"
 
 esp32:
   board: esp32-s3-devkitc-1
