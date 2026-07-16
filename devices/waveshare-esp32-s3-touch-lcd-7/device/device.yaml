@@ -84,7 +84,11 @@ ota:
   - platform: http_request
 
 packages:
-  core_infra: !include ../../../common/device/core_infra.yaml
+  # Pull the core infrastructure directly from the remote repository
+  core_infra:
+    url: https://github.com/jtenniswood/espcontrol
+    ref: main
+    file: common/device/core_infra.yaml
 
 logger:
 
