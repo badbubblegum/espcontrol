@@ -1,16 +1,12 @@
-# =============================================================
-# Waveshare 7" ESP32-S3-N8R8 Capacitive Touch Display 800×480
+# =============================================================================
+# DEVICE - Waveshare ESP32-S3-N8R8 7" Capacitive Touch Display 800×480
 # https://www.waveshare.com/esp32-s3-touch-lcd-7.htm
-# Hardware configuration for EspControl
-# =============================================================
+# =============================================================================
 
 substitutions:
-  espcontrol_component_url: "https://github.com/badbubblegum/espcontrol"
+  espcontrol_component_url: "https://github.com/jtenniswood/espcontrol"
   espcontrol_component_ref: "main"
 
-# ---------------------------------------------------------------------------
-# ESP32-S3 platform (8MB flash, ESP-IDF framework)
-# ---------------------------------------------------------------------------
 esp32:
   board: esp32-s3-devkitc-1
   variant: ESP32S3
@@ -21,10 +17,6 @@ esp32:
     advanced:
       enable_idf_experimental_features: true
     sdkconfig_options:
-      CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC: "y"
-      CONFIG_ESP_TASK_WDT_TIMEOUT_S: "30"
-      CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM: "8"
-      CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP: "y"
       COMPILER_OPTIMIZATION_SIZE: y
       CONFIG_ESP32S3_DATA_CACHE_64KB: "y"
       CONFIG_ESPTOOLPY_FLASHSIZE_8MB: "y"
@@ -39,24 +31,10 @@ esp32:
       CONFIG_SPIRAM_RODATA: y
       CONFIG_ESP32S3_DATA_CACHE_LINE_64B: y
       CONFIG_COMPILER_OPTIMIZATION_PERF: y
+      CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC: "y"
+      CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM: "8"
+      CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP: "y"
 
-# ---------------------------------------------------------------------------
-# External component
-# ---------------------------------------------------------------------------
-external_components:
-  - source:
-      type: git
-      url: ${espcontrol_component_url}
-      ref: ${espcontrol_component_ref}
-      path: components
-    components: [espcontrol, artwork_image]
-    refresh: 0s
-
-espcontrol:
-
-# ---------------------------------------------------------------------------
-# ESPHome core
-# ---------------------------------------------------------------------------
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
@@ -66,116 +44,70 @@ esphome:
     board_build.flash_mode: dio
     board_upload.maximum_ram_size: 524288
   on_boot:
-    - priority: 600
-      then:
-        # Keep the CH422G backlight enable pin always on;
-        # brightness is handled by the LEDC PWM output below.
-        - output.turn_on: ch422g_backlight_enable
+#    - priority: 800
+#      then:
+#        - lambda: |-
+#            auto reason = esp_reset_reason();
+#            if (reason == ESP_RST_USB || reason == ESP_RST_SW) {
+#              esp_sleep_enable_timer_wakeup(100000);
+#              esp_deep_sleep_start();
+#            }
     - priority: -100
       then:
-        - lambda: 'id(screen_rotation_ready) = true;'
         - script.execute: apply_screen_rotation
-        - script.execute: clock_bar_apply
 
-# ---------------------------------------------------------------------------
-# Shared infrastructure (http_req, globals, sorting groups, safe_mode, etc.)
-# ---------------------------------------------------------------------------
-packages:
-  core_infra: !include ../../../common/device/core_infra.yaml
+external_components:
+  - source:
+      type: git
+      url: ${espcontrol_component_url}
+      ref: ${espcontrol_component_ref}
+      path: components
+    components: [espcontrol]
+    refresh: 0s
 
-# ---------------------------------------------------------------------------
-# API, logger, wifi
-# ---------------------------------------------------------------------------
-api:
-  listen_backlog: 4
-  max_connections: 3
-  max_send_queue: 12
+espcontrol:
 
-logger:
-  hardware_uart: UART0
-
-wifi:
-  use_psram: true
-
-# ---------------------------------------------------------------------------
-# OTA updates
-# ---------------------------------------------------------------------------
-ota:
-  - platform: esphome
-    on_begin:
-      then:
-        - script.execute: show_update_writing
-        - script.wait: show_update_writing
-    on_end:
-      then:
-        - globals.set:
-            id: firmware_update_complete_pending
-            value: 'true'
-        - lambda: 'global_preferences->sync();'
-    on_error:
-      then:
-        - script.execute: show_update_failed
-  - platform: http_request
-    id: ota_http_request
-    on_begin:
-      then:
-        - script.execute: show_update_writing
-        - script.wait: show_update_writing
-    on_end:
-      then:
-        - globals.set:
-            id: firmware_update_complete_pending
-            value: 'true'
-        - lambda: 'global_preferences->sync();'
-    on_error:
-      then:
-        - script.execute: show_update_failed
-
-# ---------------------------------------------------------------------------
-# PSRAM
-# ---------------------------------------------------------------------------
 psram:
   mode: octal
   speed: 120MHz
 
-# ---------------------------------------------------------------------------
-# SPI bus
-# ---------------------------------------------------------------------------
+ota:
+  - platform: esphome
+    on_begin:
+      then:
+        - light.turn_off: display_backlight
+    on_end:
+      then:
+        - lambda: |-
+            esp_sleep_enable_timer_wakeup(100000);
+            esp_deep_sleep_start();
+  - platform: http_request
+
+packages:
+  core_infra: !include ../../../common/device/core_infra.yaml
+
+logger:
+
+wifi:
+  use_psram: true
+
+ch422g:
+  - id: ch422g_hub
+
 spi:
   clk_pin: GPIO12
   mosi_pin: GPIO11
   miso_pin: GPIO13
 
-# ---------------------------------------------------------------------------
-# I2C bus
-# ---------------------------------------------------------------------------
 i2c:
   sda: GPIO08
   scl: GPIO09
   scan: true
   id: bus_a
 
-# ---------------------------------------------------------------------------
-# IO Expander (CH422G)
-# ---------------------------------------------------------------------------
-ch422g:
-  - id: ch422g_hub
-
-# ---------------------------------------------------------------------------
-# Backlight
-# The CH422G pin only does binary on/off, so we keep it permanently enabled
-# and use a LEDC PWM output on an internal GPIO for actual brightness control.
-# GPIO15 is unused on this board and works as the PWM signal source.
-# ---------------------------------------------------------------------------
 output:
-  - platform: ledc
-    pin: GPIO15
-    id: gpio_backlight_pwm
-    frequency: 1000Hz
-    min_power: 0.01
-    zero_means_zero: true
   - platform: gpio
-    id: ch422g_backlight_enable
+    id: lcdbacklight_output
     pin:
       ch422g: ch422g_hub
       number: 2
@@ -183,27 +115,32 @@ output:
         output: true
       inverted: false
 
+  - platform: template
+    id: gpio_backlight_pwm
+    type: float
+    write_action:
+      - if:
+          condition:
+            lambda: 'return state > 0.01f;'
+          then:
+            - output.turn_on: lcdbacklight_output
+          else:
+            - output.turn_off: lcdbacklight_output
+
 light:
-  - platform: monochromatic
-    output: gpio_backlight_pwm
+  - platform: binary
+    output: lcdbacklight_output
     name: Display Backlight
     icon: mdi:lightbulb-on
     id: display_backlight
     restore_mode: RESTORE_DEFAULT_ON
-    default_transition_length: 0s
-    gamma_correct: 1.0
     on_turn_on:
       then:
         - if:
             condition:
               lambda: |-
-                auto now = panel_time_or_fallback(id(panel_time).now(), id(homeassistant_time).now());
-                return (id(screen_schedule_asleep) &&
-                        !id(schedule_mode_clock)) ||
-                       screen_schedule_waiting_for_time(
-                         id(screen_schedule_trigger).state,
-                         id(schedule_enabled).state,
-                         now.is_valid());
+                return id(screen_schedule_asleep) ||
+                       (id(schedule_enabled).state && !panel_time_or_fallback(id(panel_time).now(), id(homeassistant_time).now()).is_valid());
             then:
               - script.execute: backlight_force_display_off
             else:
@@ -212,32 +149,18 @@ light:
                     lambda: 'return id(screensaver_display_off_active);'
                   then:
                     - script.execute: screensaver_wake
-    on_turn_off:
-      then:
-        - if:
-            condition:
-              lambda: |-
-                return !id(display_asleep) &&
-                       !id(screen_schedule_asleep) &&
-                       !id(screensaver_display_off_active) &&
-                       !id(screensaver_dimmed_active);
-            then:
-              - script.execute: screen_schedule_manual_sleep
 
-# ---------------------------------------------------------------------------
-# Touchscreen (GT911 capacitive)
-# ---------------------------------------------------------------------------
 touchscreen:
   - platform: gt911
     id: my_touchscreen
     display: my_display
     i2c_id: bus_a
-    interrupt_pin: GPIO4
     update_interval: 16ms
+    interrupt_pin: GPIO4
     transform:
       swap_xy: false
-      mirror_x: true
-      mirror_y: true
+      mirror_x: false
+      mirror_y: false
     reset_pin:
       ch422g: ch422g_hub
       number: 1
@@ -245,18 +168,13 @@ touchscreen:
     on_touch:
       - script.execute: screensaver_wake
 
-# ---------------------------------------------------------------------------
-# Display (RPI DPI RGB 800×480)
-# ---------------------------------------------------------------------------
 display:
   - platform: rpi_dpi_rgb
     id: my_display
-    setup_priority: 240
     update_interval: never
     auto_clear_enabled: false
     color_order: RGB
     pclk_frequency: 16MHz
-    rotation: 180
     dimensions:
       width: 800
       height: 480
@@ -281,55 +199,66 @@ display:
     vsync_pulse_width: 4
     data_pins:
       red:
-        - 1         #r3
-        - 2         #r4
-        - 42        #r5
-        - 41        #r6
-        - 40        #r7
+        - 1
+        - 2
+        - 42
+        - 41
+        - 40
       blue:
-        - 14        #b3
-        - 38        #b4
-        - 18        #b5
-        - 17        #b6
-        - 10        #b7
+        - 14
+        - 38
+        - 18
+        - 17
+        - 10
       green:
-        - 39        #g2
-        - 0         #g3
-        - 45        #g4
-        - 48        #g5
-        - 47        #g6
-        - 21        #g7
+        - 39
+        - 0
+        - 45
+        - 48
+        - 47
+        - 21
 
-# ---------------------------------------------------------------------------
-# LVGL base
-# ---------------------------------------------------------------------------
 lvgl:
   id: main_lvgl
   setup_priority: 230
-  buffer_size: 12%
+  buffer_size: 25%
   displays: my_display
   rotation: 180
   touchscreens:
     - touchscreen_id: my_touchscreen
       long_press_time: 3s
 
-# ---------------------------------------------------------------------------
-# Screen rotation (fixed landscape — select is a stub to satisfy framework
-# references in sensors.yaml; rotation is not physically supported)
-# ---------------------------------------------------------------------------
-globals:
-  - id: screen_rotation_ready
-    type: bool
-    initial_value: 'false'
+script:
+  - id: apply_screen_rotation
+    then:
+      - if:
+          condition:
+            lambda: 'return id(screen_rotation_select).current_option() == "90";'
+          then:
+            - lvgl.display.set_rotation: 270
+          else:
+            - if:
+                condition:
+                  lambda: 'return id(screen_rotation_select).current_option() == "180";'
+                then:
+                  - lvgl.display.set_rotation: 0
+                else:
+                  - if:
+                      condition:
+                        lambda: 'return id(screen_rotation_select).current_option() == "270";'
+                      then:
+                        - lvgl.display.set_rotation: 90
+                      else:
+                        - lvgl.display.set_rotation: 180
 
 select:
   - platform: template
-    name: "Screen Rotation"
+    name: "Screen: Rotation"
     internal: true
     disabled_by_default: true
     id: screen_rotation_select
     entity_category: config
-    icon: mdi:screen-rotation
+    icon: "mdi:screen-rotation"
     optimistic: true
     restore_value: true
     initial_option: "0"
@@ -340,9 +269,4 @@ select:
       - "270"
     on_value:
       then:
-        - lambda: 'return;'
-
-script:
-  - id: apply_screen_rotation
-    then:
-      - lambda: 'return;'   # no-op; display rotation is fixed at hardware level
+        - script.execute: apply_screen_rotation
